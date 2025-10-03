@@ -11,7 +11,7 @@ import { uploader } from "../utils/cloudinary.js";
 import puppeteer from "puppeteer";
 import mongoose from "mongoose";
 import Song from "../models/songModel.js";
-import { postcodes as POSTCODE_MAP_ARR } from "../../admin/src/assets/postcodes.js"; 
+import { postcodes as POSTCODE_MAP_ARR } from "../utils/postcodes.js"; 
 
 const POSTCODE_MAP = (Array.isArray(POSTCODE_MAP_ARR) && POSTCODE_MAP_ARR[0]) || {};
 
