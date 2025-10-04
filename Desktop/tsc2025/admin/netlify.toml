@@ -1,4 +1,4 @@
 [build]
   base = "Desktop/tsc2025/admin"
-  command = "npm ci --legacy-peer-deps && npm run build"
+  command = "npm install && npm run build"
   publish = "dist"
