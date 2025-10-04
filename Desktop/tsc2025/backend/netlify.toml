@@ -13,5 +13,6 @@
 # Lets you call /api/... in both dev and prod
 [[redirects]]
   from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  to   = "https://tsc2025.onrender.com/:splat"
   status = 200
+  force = true
