@@ -71,16 +71,18 @@ const allowed = [
   'https://tsc2025-admin-portal.netlify.app',
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: (origin, cb) => {
-    // allow same-origin (no Origin header) and any whitelisted origin
     if (!origin || allowed.includes(origin)) return cb(null, true);
     return cb(null, false);
   },
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization', 'token'],
+  allowedHeaders: ['Content-Type','Authorization','token'],
   credentials: true,
-}));
+};
+
++ app.use(cors(corsOptions));
+
 
 // Ensure caches vary by Origin for CORS
 app.use((req, res, next) => {
@@ -89,7 +91,7 @@ app.use((req, res, next) => {
 });
 
 // Make sure preflight doesn’t get blocked
-app.options('*', cors());
+app.options('*', cors(corsOptions));
 
 // Twilio webhook test endpoint
 app.post(
