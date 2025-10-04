@@ -38,14 +38,18 @@ const Login = ({ setToken, setUserEmail, setUserRole, setUserFirstName, setUserL
         console.log("🔄 Submitting login/register form");
         console.log("➡️ Endpoint:", endpoint);
         console.log("📦 Payload:", payload);
-      const response = await axios.post(endpoint, payload);
-      console.log("✅ Response received:", response.data);
-      if (!response.data.success) {
-        
-        throw new Error(response.data.message || "Authentication failed");
-      }
-  
-      const { token, email: resEmail, role, firstName: resFirstName, lastName: resLastName, phone: resPhone, userId} = response.data;  
+const { data } = await axios.post(
+  endpoint,
+  payload,
+  { withCredentials: false }
+);
+
+console.log("✅ Response received:", data);
+if (!data?.success) {
+  throw new Error(data?.message || "Authentication failed");
+}
+
+const { token, email: resEmail, role, firstName: resFirstName, lastName: resLastName, phone: resPhone, userId } = data;
       setToken(token);
       setUserEmail(resEmail);
       setUserRole(role);
