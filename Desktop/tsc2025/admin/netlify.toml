@@ -1,4 +1,4 @@
 [build]
   base = "Desktop/tsc2025/admin"
   command = "npm install && npm run build"
-  publish = "dist"rm -f package-lock.json
+  publish = "dist"
