@@ -30,24 +30,25 @@ const onSubmitHandler = async (event) => {
   }
 
   try {
-    const endpoint =
-      currentState === "Sign Up"
-        ? `${backendUrl}/api/musician-login/register`
-        : `${backendUrl}/api/musician-login/login`;
+   const endpoint =
+  currentState === "Sign Up"
+    ? `${backendUrl}/api/musician-login/register`
+    : `${backendUrl}/api/musician-login/login`;
 
-    console.log("🔄 Submitting login/register form");
-    console.log("➡️ Endpoint:", endpoint);
-    console.log("📦 Payload:", payload);
+console.log("🔄 Submitting login/register form");
+console.log("➡️ Endpoint:", endpoint);
+console.log("📦 Payload:", payload);
 
-    // index.jsx sets axios.defaults.withCredentials = true
-    // For this endpoint we DON'T want creds; override:
-    const response = await axios.post(endpoint, payload, { withCredentials: false });
+const response = await axios.post(endpoint, payload, {
+  headers: { "Content-Type": "application/json" },
+  withCredentials: false, // don't include cookies
+});
 
-    console.log("✅ Response received:", response.data);
+console.log("✅ Response received:", response.data);
 
-    if (!response.data?.success) {
-      throw new Error(response.data?.message || "Authentication failed");
-    }
+if (!response.data.success) {
+  throw new Error(response.data.message || "Authentication failed");
+}
 
     const {
       token,

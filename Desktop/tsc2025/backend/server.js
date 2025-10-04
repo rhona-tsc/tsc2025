@@ -62,7 +62,7 @@ cloudinary.config({
   api_secret: process.env.REACT_APP_CLOUDINARY_SECRET_KEY,
 });
 
-
+// -------------------- ✅ CORS CONFIG --------------------
 const allowed = [
   'http://localhost:5173',
   'http://localhost:5174',
@@ -74,7 +74,7 @@ const allowed = [
 const corsOptions = {
   origin: (origin, cb) => {
     if (!origin || allowed.includes(origin)) return cb(null, true);
-    return cb(null, false);
+    return cb(new Error(`❌ CORS blocked origin: ${origin}`));
   },
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization','token'],
@@ -82,6 +82,22 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// ✅ Ensure every actual response also includes CORS headers
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin || allowed.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin || "*");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, token");
+  }
+  res.header("Vary", "Origin");
+  next();
+});
+
+// ✅ Handle preflight
+app.options('*', cors(corsOptions));
+// ---------------------------------------------------------
 
 
 // Ensure caches vary by Origin for CORS
