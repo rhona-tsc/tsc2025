@@ -30,7 +30,7 @@ import SortCodeInput from "./BandMemberFields/SortCodeInput";
 import AccountNumberInput from "./BandMemberFields/AccountNumberInputs";
 import AccountNameInput from "./BandMemberFields/AccountNameInput";
 import WirelessCheckbox from "./BandMemberFields/WirelessCheckbox";
-import SoloPACheckbox from "./BandMemberFields/SoloPaCheckbox";
+import SoloPACheckbox from "./BandMemberFields/SoloPACheckbox";
 import DuoPACheckbox from "./BandMemberFields/DuoPACheckbox";
 import CanDJCheckbox from "./BandMemberFields/CanDJCheckbox";
 import InstrumentInput from "./BandMemberFields/InstrumentInput";
