@@ -40,7 +40,7 @@ import AdditionalRoleInput from "./BandMemberFields/AdditionalRoleInput";
 import PostCodeInput from "./BandMemberFields/PostCodeInput";
 import HaveMixingConsoleCheckbox from "./BandMemberFields/HaveMixingConsoleCheckbox";
 import HasDJBoothCheckbox from "./BandMemberFields/HasDJBoothCheckbox";
-import HasDjTableCheckbox from "./BandMemberFields/HasDjTableCheckbox";
+import HasDJTableCheckbox from "./BandMemberFields/HasDJTableCheckbox";
 
 import DeputiesInput from "./BandMemberFields/DeputiesInput";
 import RoamingPercussion from "./RoamingPercussion";
@@ -848,7 +848,7 @@ const LineupsComponent = ({ lineups = [], setLineups, setExtrasPricing, selected
                                   />
                                 </div>
                                 <div className="col-span-1">
-                                  <HasDjTableCheckbox
+                                  <HasDJTableCheckbox
                                     member={member}
                                     index={lineupIndex}
                                     memberIndex={memberIndex}
