@@ -1,7 +1,7 @@
 // components/SoloPACheckbox.jsx
 import React from "react";
 
-const SoloPaCheckbox = ({ member, index, memberIndex, updateBandMember }) => {
+const SoloPACheckbox = ({ member, index, memberIndex, updateBandMember }) => {
   const handleChange = () => {
     updateBandMember(index, memberIndex, "haveSoloPa", !member.haveSoloPa);
   };
@@ -21,4 +21,4 @@ const SoloPaCheckbox = ({ member, index, memberIndex, updateBandMember }) => {
   );
 };
 
-export default SoloPaCheckbox;
+export default SoloPACheckbox;
