@@ -81,7 +81,7 @@ const corsOptions = {
   credentials: true,
 };
 
-+ app.use(cors(corsOptions));
+app.use(cors(corsOptions));
 
 
 // Ensure caches vary by Origin for CORS
