@@ -16,69 +16,73 @@ const Login = ({ setToken, setUserEmail, setUserRole, setUserFirstName, setUserL
   const [password, setPassword] = useState("");
 
 
-  const onSubmitHandler = async (event) => {
-    event.preventDefault();
-    const payload =
+const onSubmitHandler = async (event) => {
+  event.preventDefault();
+
+  const payload =
+    currentState === "Sign Up"
+      ? { firstName, lastName, email, password, phone }
+      : { email, password };
+
+  if (!payload.email || !payload.password) {
+    toast(<CustomToast type="error" message="Email and password are required." />);
+    return;
+  }
+
+  try {
+    const endpoint =
       currentState === "Sign Up"
-        ? { firstName, lastName, email, password, phone }
-        : { email, password };
-  
-    if (!payload.email || !payload.password) {
-      console.error("🚨 Missing email or password in payload:", payload);
-      throw new Error("Email and password are required.");
+        ? `${backendUrl}/api/musician-login/register`
+        : `${backendUrl}/api/musician-login/login`;
+
+    console.log("🔄 Submitting login/register form");
+    console.log("➡️ Endpoint:", endpoint);
+    console.log("📦 Payload:", payload);
+
+    // index.jsx sets axios.defaults.withCredentials = true
+    // For this endpoint we DON'T want creds; override:
+    const response = await axios.post(endpoint, payload, { withCredentials: false });
+
+    console.log("✅ Response received:", response.data);
+
+    if (!response.data?.success) {
+      throw new Error(response.data?.message || "Authentication failed");
     }
-  
-    try {
-      const endpoint =
-        currentState === "Sign Up"
-          ? `${backendUrl}/api/musician-login/register`
-          : `${backendUrl}/api/musician-login/login`;
-  
-     
-        console.log("🔄 Submitting login/register form");
-        console.log("➡️ Endpoint:", endpoint);
-        console.log("📦 Payload:", payload);
-const { data } = await axios.post(
-  endpoint,
-  payload,
-  { withCredentials: false }
-);
 
-console.log("✅ Response received:", data);
-if (!data?.success) {
-  throw new Error(data?.message || "Authentication failed");
-}
+    const {
+      token,
+      email: resEmail,
+      role,
+      firstName: resFirstName,
+      lastName: resLastName,
+      phone: resPhone,
+      userId,
+    } = response.data;
 
-const { token, email: resEmail, role, firstName: resFirstName, lastName: resLastName, phone: resPhone, userId } = data;
-      setToken(token);
-      setUserEmail(resEmail);
-      setUserRole(role);
-      setUserFirstName(resFirstName);
-      setUserLastName(resLastName);
-      setUserPhone(resPhone);
-     
- 
-  
-      localStorage.setItem("token", token);
-      localStorage.setItem("userEmail", resEmail);
-      localStorage.setItem("userRole", role);
-      localStorage.setItem("userFirstName", resFirstName);
-      localStorage.setItem("userId", userId);
-      localStorage.setItem("userLastName", resLastName);
-     
-      localStorage.setItem("userPhone", resPhone);
- const user = {
-  _id: response.data.userId,
-  email: response.data.email
+    // Lift to parent state
+    setToken(token);
+    setUserEmail(resEmail);
+    setUserRole(role);
+    setUserFirstName(resFirstName);
+    setUserLastName(resLastName);
+    setUserPhone(resPhone);
+
+    // Persist
+    localStorage.setItem("token", token);
+    localStorage.setItem("userEmail", resEmail);
+    localStorage.setItem("userRole", role);
+    localStorage.setItem("userFirstName", resFirstName);
+    localStorage.setItem("userLastName", resLastName);
+    localStorage.setItem("userPhone", resPhone);
+    localStorage.setItem("userId", userId);
+    localStorage.setItem("user", JSON.stringify({ _id: userId, email: resEmail }));
+
+    navigate("/");
+  } catch (err) {
+    console.error("❌ Auth error:", err);
+    toast(<CustomToast type="error" message={err?.message || "Authentication failed"} />);
+  }
 };
-localStorage.setItem("user", JSON.stringify(user));
-  
-      navigate("/");
-    } catch (err) {
-      console.error("❌ Auth error:", err);
-      toast(<CustomToast type="error" message={err.message || "Authentication failed"} />);
-    }
-  };
 
   return (
     <form
