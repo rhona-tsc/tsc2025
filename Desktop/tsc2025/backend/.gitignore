@@ -20,4 +20,6 @@ uploads/
 # editor
 .vscode/
 .idea/
-EOF
+EOFbackend/.env
+backend/uploads/
+backend/node_modules/
