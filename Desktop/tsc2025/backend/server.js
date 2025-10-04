@@ -68,6 +68,7 @@ const allowed = [
   'http://localhost:5174',
   'https://tsc2025.netlify.app',
   'https://www.thesupremecollective.co.uk',
+  'https://tsc2025-admin-portal.netlify.app',
 ];
 
 app.use(cors({
@@ -80,6 +81,12 @@ app.use(cors({
   allowedHeaders: ['Content-Type','Authorization', 'token'],
   credentials: true,
 }));
+
+// Ensure caches vary by Origin for CORS
+app.use((req, res, next) => {
+  res.header('Vary', 'Origin');
+  next();
+});
 
 // Make sure preflight doesn’t get blocked
 app.options('*', cors());
@@ -181,7 +188,7 @@ app.use("/debug", debugRoutes);
 app.use("/api", boardBackfillRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/notifications", notificationsRoutes);
-app.use('api/act-submission', submitActSubmission)
+app.use('/api/act-submission', submitActSubmission)
 // ✅ V2 availability queue endpoints
 app.use("/api/availability-v2", availabilityV2Routes);
 
