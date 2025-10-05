@@ -1,3 +1,4 @@
+// backend/server.js
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
@@ -6,7 +7,7 @@ import connectCloudinary from './config/connectCloudinary.js';
 import cloudinary from './config/cloudinary.js';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
-import upload from './middleware/multer.js';
+
 import router from "./routes/debugRoutes.js";
 import boardBackfillRoutes from "./routes/boardBackfillRoutes.js";
 import invoiceRoutes from "./routes/invoiceRoutes.js";
@@ -41,27 +42,19 @@ import { WA_FALLBACK_CACHE, sendSMSMessage } from './utils/twilioClient.js';
 import availabilityV2Routes from "./routes/availabilityV2.js";
 import { twilioInboundV2, twilioStatusV2 } from './controllers/availabilityControllerV2.js';
 import newsletterRoutes from './routes/newsletterRoutes.js';
-
-// ✅ NEW: acts-available endpoint (client fetches /api/availability/acts-available?date=YYYY-MM-DD)
 import { getAvailableActIds } from './controllers/actAvailabilityController.js';
 
-// ✅ NEW imports
 import mongoose from "mongoose";
 import musicianModel from "./models/musicianModel.js";
 import { submitActSubmission } from './controllers/actSubmissionController.js';
 
 const app = express();
+const port = process.env.PORT || 4000;
 
-const allowed = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'https://tsc2025.netlify.app',
-  'https://www.thesupremecollective.co.uk',
-  'https://tsc2025-admin-portal.netlify.app',
-];
+/* -------------------------------------------------------------------------- */
+/*                                 CORS FIRST                                 */
+/* -------------------------------------------------------------------------- */
 
-// ---- Ultra-early CORS shim ----
-/* ---- Ultra-early CORS shim (before any routes) ---- */
 const CORS_WHITELIST = new Set([
   'http://localhost:5173',
   'http://localhost:5174',
@@ -70,66 +63,47 @@ const CORS_WHITELIST = new Set([
   'https://tsc2025-admin-portal.netlify.app',
 ]);
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin || '';
-
-  // Echo the Origin only if it's allowed, or allow * for tools without Origin
-  if (!origin || CORS_WHITELIST.has(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-  }
-
-  res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, token');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
-  // ⚠️ IMPORTANT: Do NOT set Access-Control-Allow-Credentials unless it's "true".
-  // We aren't using cookies for this flow, so omit it entirely.
-
-  // CORS debug: log origin and the ACAO we send
-  if (req.method !== 'OPTIONS') {
-    console.log(`🌐 CORS: ${req.method} ${req.url} | origin=${origin || 'n/a'}`);
-  }
-
-  if (req.method === 'OPTIONS') {
-    const acao = res.getHeader('Access-Control-Allow-Origin');
-    console.log(`   ↳ preflight ACAO=${acao || '(none)'}`);
-    return res.sendStatus(204);
-  }
-
-  // After the response goes out, log the ACAO value that actually went out
-  const _end = res.end;
-  res.end = function (...args) {
-    const acao = res.getHeader('Access-Control-Allow-Origin');
-    console.log(`   ↳ response ACAO=${acao || '(none)'}`);
-    _end.apply(this, args);
-  };
-
-  next();
-});
-
-/* ---- cors package (secondary; mirrors whitelist, handles edge cases) ---- */
-app.use(cors({
+const corsOptions = {
   origin(origin, cb) {
+    // allow same-origin / curl (no Origin) and our whitelist
     if (!origin || CORS_WHITELIST.has(origin)) return cb(null, true);
     return cb(new Error(`CORS blocked origin: ${origin}`));
   },
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization','token'],
-  credentials: false, // no cookies in this flow
-}));
-app.options('*', cors()); // generic preflight passthrough
+  credentials: false, // not using cookies for admin portal login flow
+};
 
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));       // preflight handler
+app.use((req, res, next) => {              // cache variance + tiny debug
+  res.setHeader('Vary', 'Origin');
+  if (req.method !== 'OPTIONS') {
+    console.log(`🌐 CORS: ${req.method} ${req.url} | origin=${req.headers.origin || 'n/a'}`);
+  }
+  // Log which ACAO we actually send back
+  const _end = res.end;
+  res.end = function (...args) {
+    const acao = res.getHeader('Access-Control-Allow-Origin');
+    if (acao) console.log(`   ↳ ACAO sent: ${acao}`);
+    _end.apply(this, args);
+  };
+  next();
+});
 
+/* -------------------------------------------------------------------------- */
+/*                          Standard app middleware                            */
+/* -------------------------------------------------------------------------- */
 
-// ---- standard middleware ----
 app.use(cookieParser());
 app.use(express.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
+/* -------------------------------------------------------------------------- */
+/*                         DB + Cloudinary boot/config                         */
+/* -------------------------------------------------------------------------- */
 
-const port = process.env.PORT || 4000;
-
-// DB + Cloudinary Setup
 connectDB();
 connectCloudinary();
 cloudinary.config({
@@ -138,10 +112,11 @@ cloudinary.config({
   api_secret: process.env.REACT_APP_CLOUDINARY_SECRET_KEY,
 });
 
+/* -------------------------------------------------------------------------- */
+/*                                   Routes                                   */
+/* -------------------------------------------------------------------------- */
 
-
-// ---- REMOVE DUPLICATE corsOptions and preflight ----
-
+// Put musician-login behind the global CORS (already applied above)
 app.use('/api/musician-login', (req, _res, next) => {
   if (req.method !== 'OPTIONS') {
     console.log('🎯 hit /api/musician-login', { method: req.method, origin: req.headers.origin });
@@ -194,10 +169,9 @@ app.post("/api/shortlist/twilio/status", async (req, res) => {
   }
 });
 
-// ---- REMOVE DUPLICATE middleware and logging ----
 startRemindersPoller({ intervalMs: 30000 }); // every 30s
 
-// --------- ROUTES ---------
+// Main API mounts
 app.use('/api/user', userRouter);
 app.use("/api", userRoute);
 app.use('/api/acts', userRouter);
@@ -232,14 +206,15 @@ app.use("/debug", debugRoutes);
 app.use("/api", boardBackfillRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/notifications", notificationsRoutes);
-app.use('/api/act-submission', submitActSubmission)
-// ✅ V2 availability queue endpoints
+app.use('/api/act-submission', submitActSubmission);
+
+// V2 availability queue endpoints
 app.use("/api/availability-v2", availabilityV2Routes);
 
-// ✅ Mount legacy availability routes
+// Legacy availability
 app.use('/api/availability', availabilityRoutes);
 
-// ✅ Direct mount
+// Direct mount
 app.get("/api/availability/acts-available", async (req, res) => {
   const date = String(req.query?.date || "").slice(0, 10);
   console.log("🗓️  GET /api/availability/acts-available", { date });
@@ -252,7 +227,7 @@ app.get("/api/availability/acts-available", async (req, res) => {
   }
 });
 
-// ✅ Alias for legacy/alternate client: /api/availability/acts-by-date?date=YYYY-MM-DD
+// Alias for legacy/alternate client
 app.get("/api/availability/acts-by-date", async (req, res) => {
   const date = String(req.query?.date || "").slice(0, 10);
   console.log("🗓️  GET /api/availability/acts-by-date (alias to acts-available)", { date });
@@ -264,7 +239,7 @@ app.get("/api/availability/acts-by-date", async (req, res) => {
   }
 });
 
-// Temporary aliases so existing Twilio config /api/shortlist/twilio/inboundV2 works
+// Temporary aliases so existing Twilio config keeps working
 app.post(
   "/api/shortlist/twilio/inboundV2",
   express.urlencoded({ extended: false }),
@@ -288,13 +263,13 @@ app.post(
 );
 
 // Health check
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.send("✅ API Working");
 });
 app.use("/api/debug", debugRoutes);
 
 // Google calendar webhook setup
-app.get('/api/google/watch', async (req, res) => {
+app.get('/api/google/watch', async (_req, res) => {
   try {
     await watchCalendar();
     res.send('📡 Calendar webhook registered');
@@ -312,5 +287,8 @@ app.get("/debug/musician-id?email=shamyra@thesupremecollective.co.uk", router);
 app.use("/api/musician", musicianRoutes);
 app.use("/api/upload", uploadRoutes);
 
-// Start server
+/* -------------------------------------------------------------------------- */
+/*                                   Server                                   */
+/* -------------------------------------------------------------------------- */
+
 app.listen(port, () => console.log(`🚀 Server started on PORT: ${port}`));
