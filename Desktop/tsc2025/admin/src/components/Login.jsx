@@ -81,6 +81,12 @@ if (!response.data.success) {
     navigate("/");
   } catch (err) {
     console.error("❌ Auth error:", err);
+     console.error("❌ Auth error:", {
+    message: err?.message,
+    code: err?.code,
+    status: err?.response?.status,
+    data: err?.response?.data,
+  });
     toast(<CustomToast type="error" message={err?.message || "Authentication failed"} />);
   }
 };

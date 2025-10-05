@@ -86,9 +86,6 @@ if (process.env.GOOGLE_REFRESH_TOKEN) {
   oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
 }
 
-// On boot, verify we can refresh
-debugGoogleAuth("boot");
-
 
 
 

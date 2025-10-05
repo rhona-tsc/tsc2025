@@ -52,7 +52,6 @@ import { submitActSubmission } from './controllers/actSubmissionController.js';
 
 const app = express();
 
-// --- ultra-early CORS shim (must be first) ---
 const allowed = [
   'http://localhost:5173',
   'http://localhost:5174',
@@ -61,15 +60,40 @@ const allowed = [
   'https://tsc2025-admin-portal.netlify.app',
 ];
 
+// ---- CORS (must be before any routes) ----
+const corsOptions = {
+  origin: (origin, cb) => {
+    // allow same-origin / curl (no Origin) and our whitelist
+    if (!origin || allowed.includes(origin)) return cb(null, true);
+    return cb(new Error(`CORS blocked origin: ${origin}`));
+  },
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','token'],
+  credentials: false, // we are not using cookies for this flow
+};
+app.use(cors(corsOptions));
+// vary caches by Origin
+app.use((req, res, next) => { res.setHeader('Vary', 'Origin'); next(); });
+// optional: handle preflight explicitly
+app.options('*', cors(corsOptions));
+
+// ---- standard middleware ----
+app.use(cookieParser());
+app.use(express.json({ limit: '100mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+
+// request logging (handy to see Origin and response header)
 app.use((req, res, next) => {
-  const origin = req.headers.origin || '';
-  if (!origin || allowed.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*'); // ok since we send no cookies
-  }
-  res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, token');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  req._rid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  console.log(`🔍 [${req._rid}] ${req.method} ${req.url} | origin: ${req.headers.origin || 'n/a'}`);
+  // Log the ACAO we end up sending
+  const _end = res.end;
+  res.end = function (...args) {
+    const acao = res.getHeader('Access-Control-Allow-Origin');
+    if (acao) console.log(`   ↳ ACAO sent: ${acao}`);
+    _end.apply(this, args);
+  };
   next();
 });
 
@@ -96,9 +120,13 @@ const corsOptions = {
   credentials: false,
 };
 
-app.use(cors(corsOptions));
 
-
+app.use('/api/musician-login', (req, _res, next) => {
+  if (req.method !== 'OPTIONS') {
+    console.log('🎯 hit /api/musician-login', { method: req.method, origin: req.headers.origin });
+  }
+  next();
+}, musicianLoginRouter);
 
 // ✅ Handle preflight
 app.options('*', cors(corsOptions));
