@@ -60,21 +60,46 @@ const allowed = [
   'https://tsc2025-admin-portal.netlify.app',
 ];
 
+// ---- Ultra-early CORS shim ----
+app.use((req, res, next) => {
+  const origin = req.headers.origin || '';
+  const allowed = [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'https://tsc2025.netlify.app',
+    'https://www.thesupremecollective.co.uk',
+    'https://tsc2025-admin-portal.netlify.app',
+  ];
+  if (!origin || allowed.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  }
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, token');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
+  // we are not using cookies for this flow
+  res.setHeader('Access-Control-Allow-Credentials', 'false');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 // ---- CORS (must be before any routes) ----
 const corsOptions = {
   origin: (origin, cb) => {
-    // allow same-origin / curl (no Origin) and our whitelist
-    if (!origin || allowed.includes(origin)) return cb(null, true);
+    const white = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'https://tsc2025.netlify.app',
+      'https://www.thesupremecollective.co.uk',
+      'https://tsc2025-admin-portal.netlify.app',
+    ];
+    if (!origin || white.includes(origin)) return cb(null, true);
     return cb(new Error(`CORS blocked origin: ${origin}`));
   },
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization','token'],
-  credentials: false, // we are not using cookies for this flow
+  credentials: false,
 };
 app.use(cors(corsOptions));
-// vary caches by Origin
-app.use((req, res, next) => { res.setHeader('Vary', 'Origin'); next(); });
-// optional: handle preflight explicitly
 app.options('*', cors(corsOptions));
 
 // ---- standard middleware ----
@@ -110,16 +135,7 @@ cloudinary.config({
 
 
 
-const corsOptions = {
-  origin: (origin, cb) => {
-    if (!origin || allowed.includes(origin)) return cb(null, true);
-    return cb(new Error(`❌ CORS blocked origin: ${origin}`));
-  },
-  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization','token'],
-  credentials: false,
-};
-
+// ---- REMOVE DUPLICATE corsOptions and preflight ----
 
 app.use('/api/musician-login', (req, _res, next) => {
   if (req.method !== 'OPTIONS') {
@@ -127,17 +143,6 @@ app.use('/api/musician-login', (req, _res, next) => {
   }
   next();
 }, musicianLoginRouter);
-
-// ✅ Handle preflight
-app.options('*', cors(corsOptions));
-// ---------------------------------------------------------
-
-
-// Ensure caches vary by Origin for CORS
-app.use((req, res, next) => {
-  res.header('Vary', 'Origin');
-  next();
-});
 
 // Twilio webhook test endpoint
 app.post(
@@ -184,20 +189,7 @@ app.post("/api/shortlist/twilio/status", async (req, res) => {
   }
 });
 
-// Middleware
-app.use(cookieParser());
-app.use(express.json({ limit: '100mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '100mb' }));
-app.use(express.urlencoded({ extended: true, limit: '100mb' }));
-
-// Request logging
-app.use((req, res, next) => {
-  req._rid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-  const hasBearer = typeof req.headers.authorization === 'string' && req.headers.authorization.toLowerCase().startsWith('bearer ');
-  console.log(`🔍 [${req._rid}] ${req.method} ${req.url}`);
-  console.log(`   ↳ auth: ${hasBearer ? 'Bearer present' : (req.headers.token ? 'legacy token header present' : 'no token header')}, origin: ${req.headers.origin || 'n/a'}`);
-  next();
-});
+// ---- REMOVE DUPLICATE middleware and logging ----
 startRemindersPoller({ intervalMs: 30000 }); // every 30s
 
 // --------- ROUTES ---------
@@ -205,7 +197,6 @@ app.use('/api/user', userRouter);
 app.use("/api", userRoute);
 app.use('/api/acts', userRouter);
 
-app.use('/api/musician-login', musicianLoginRouter);
 app.use('/api/musician', musicianRouter);
 app.use('/api/musician/act-v2', actV2Routes);
 
