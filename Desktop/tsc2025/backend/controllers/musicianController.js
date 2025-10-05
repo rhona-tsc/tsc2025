@@ -1016,7 +1016,7 @@ const loginMusician = async (req, res) => {
       sameSite: "Strict",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-
+console.log('ACAO header being sent (backend/controllers/musicianController.js):', res.getHeader('Access-Control-Allow-Origin'));
     return res.status(200).json({
       success: true,
       token: accessToken,

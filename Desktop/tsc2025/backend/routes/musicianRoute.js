@@ -39,6 +39,29 @@ import {
 
 const router = express.Router();
 
+
+// ---- Route-level CORS headers ----
+const ALLOWED = new Set([
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://tsc2025.netlify.app',
+  'https://www.thesupremecollective.co.uk',
+  'https://tsc2025-admin-portal.netlify.app',
+]);
+
+router.use((req, res, next) => {
+  const origin = req.headers.origin || '';
+  if (!origin || ALLOWED.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  }
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, token');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 const uploadFields = upload.fields([
   { name: "images", maxCount: 30 },
   { name: "pliFile", maxCount: 1 },
@@ -56,6 +79,7 @@ const uploadFields = upload.fields([
   { name: "digitalWardrobeSessionAllBlack", maxCount: 30 },
   { name: "additionalImages", maxCount: 50 },
 ]);
+
 
 /* ---------------- AUTH (musician) ---------------- */
 router.post("/auth/register", registerMusician);

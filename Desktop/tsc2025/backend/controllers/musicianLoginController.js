@@ -63,7 +63,7 @@ const loginMusician = async (req, res) => {
       lastName: user.lastName,
       phone: user.phone,
     });
-
+console.log('ACAO header being sent(backedn/controllers/musicianLoginController.js):', res.getHeader('Access-Control-Allow-Origin'));
     return res.json({
       success: true,
       token,
