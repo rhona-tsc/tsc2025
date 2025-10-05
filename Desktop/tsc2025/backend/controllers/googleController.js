@@ -16,32 +16,70 @@ export const oauth2Client = new google.auth.OAuth2(
 const mask = (s = "", keep = 6) =>
   s ? `${s.slice(0, keep)}…${s.slice(-keep)}` : "(empty)";
 
-
-// Quick one-shot auth check
+// ---- BEGIN REPLACE: quick auth check + safe boot guard ----
 export const debugGoogleAuth = async (label = "debug") => {
   try {
+    const cid  = process.env.GOOGLE_CLIENT_ID || "";
+    const csec = process.env.GOOGLE_CLIENT_SECRET || "";
+    const ruri = process.env.GOOGLE_REDIRECT_URI || "";
+    const rtok = process.env.GOOGLE_REFRESH_TOKEN || "";
+
     // What env did we load?
-    console.log(`🔧 [${label}] GOOGLE_REDIRECT_URI:`, process.env.GOOGLE_REDIRECT_URI);
-    console.log(`🔧 [${label}] GOOGLE_CLIENT_ID:`, process.env.GOOGLE_CLIENT_ID);
-    console.log(`🔧 [${label}] GOOGLE_REFRESH_TOKEN:`, mask(process.env.GOOGLE_REFRESH_TOKEN, 10));
+    console.log(`🔧 [${label}] GOOGLE_REDIRECT_URI:`, ruri || "(missing)");
+    console.log(`🔧 [${label}] GOOGLE_CLIENT_ID:`, cid || "(missing)");
+    console.log(`🔧 [${label}] GOOGLE_REFRESH_TOKEN:`, mask(rtok, 10));
+
+    // Basic validation (prevents confusing invalid_client later)
+    if (!cid || !csec) {
+      console.error(`❌ [${label}] Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET.`);
+      return false;
+    }
+    if (!ruri) {
+      console.error(`❌ [${label}] Missing GOOGLE_REDIRECT_URI.`);
+      return false;
+    }
+    if (!rtok) {
+      console.error(`❌ [${label}] Missing GOOGLE_REFRESH_TOKEN (authorize once to obtain).`);
+      return false;
+    }
 
     // What does the client currently have?
     console.log(`🔧 [${label}] oauth2Client.credentials (masked):`, {
       refresh_token: mask(oauth2Client.credentials?.refresh_token, 10),
-      access_token: mask(oauth2Client.credentials?.access_token, 10),
-      expiry_date: oauth2Client.credentials?.expiry_date || null,
+      access_token:  mask(oauth2Client.credentials?.access_token, 10),
+      expiry_date:   oauth2Client.credentials?.expiry_date || null,
     });
 
-    // Force a token refresh to validate the refresh_token
+    // Try to use the refresh_token
     const accessToken = await oauth2Client.getAccessToken();
     console.log(`✅ [${label}] getAccessToken() OK:`, mask(accessToken?.token || String(accessToken), 10));
     return true;
   } catch (err) {
-    console.error(`❌ [${label}] getAccessToken() failed:`, err?.message || err);
+    const msg = err?.message || String(err);
+    console.error(`❌ [${label}] getAccessToken() failed:`, msg);
+    // When it’s truly client mismatch, Google returns { error: 'invalid_client', error_description: 'Unauthorized' }
     if (err?.response?.data) console.error('❌ [google] response.data:', err.response.data);
     return false;
   }
 };
+
+// Prefer the refresh token from env at boot (if present)
+if (process.env.GOOGLE_REFRESH_TOKEN) {
+  oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+}
+
+// Only run the check when we have all three critical env vars set
+(async () => {
+  const haveCore =
+    !!process.env.GOOGLE_CLIENT_ID &&
+    !!process.env.GOOGLE_CLIENT_SECRET &&
+    !!process.env.GOOGLE_REDIRECT_URI;
+  if (haveCore) {
+    await debugGoogleAuth("boot");
+  } else {
+    console.warn("⚠️ [boot] Skipping Google auth check (missing env).");
+  }
+})();
 
 // On boot, prefer the refresh token from env
 if (process.env.GOOGLE_REFRESH_TOKEN) {
