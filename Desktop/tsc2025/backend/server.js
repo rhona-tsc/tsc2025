@@ -51,6 +51,28 @@ import musicianModel from "./models/musicianModel.js";
 import { submitActSubmission } from './controllers/actSubmissionController.js';
 
 const app = express();
+
+// --- ultra-early CORS shim (must be first) ---
+const allowed = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://tsc2025.netlify.app',
+  'https://www.thesupremecollective.co.uk',
+  'https://tsc2025-admin-portal.netlify.app',
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin || '';
+  if (!origin || allowed.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*'); // ok since we send no cookies
+  }
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, token');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 const port = process.env.PORT || 4000;
 
 // DB + Cloudinary Setup
@@ -62,14 +84,7 @@ cloudinary.config({
   api_secret: process.env.REACT_APP_CLOUDINARY_SECRET_KEY,
 });
 
-// -------------------- ✅ CORS CONFIG --------------------
-const allowed = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'https://tsc2025.netlify.app',
-  'https://www.thesupremecollective.co.uk',
-  'https://tsc2025-admin-portal.netlify.app',
-];
+
 
 const corsOptions = {
   origin: (origin, cb) => {
@@ -78,22 +93,12 @@ const corsOptions = {
   },
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization','token'],
-  credentials: true,
+  credentials: false,
 };
 
 app.use(cors(corsOptions));
 
-// ✅ Ensure every actual response also includes CORS headers
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (!origin || allowed.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin || "*");
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, token");
-  }
-  res.header("Vary", "Origin");
-  next();
-});
+
 
 // ✅ Handle preflight
 app.options('*', cors(corsOptions));
@@ -105,9 +110,6 @@ app.use((req, res, next) => {
   res.header('Vary', 'Origin');
   next();
 });
-
-// Make sure preflight doesn’t get blocked
-app.options('*', cors(corsOptions));
 
 // Twilio webhook test endpoint
 app.post(
