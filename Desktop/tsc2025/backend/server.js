@@ -61,46 +61,64 @@ const allowed = [
 ];
 
 // ---- Ultra-early CORS shim ----
+/* ---- Ultra-early CORS shim (before any routes) ---- */
+const CORS_WHITELIST = new Set([
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://tsc2025.netlify.app',
+  'https://www.thesupremecollective.co.uk',
+  'https://tsc2025-admin-portal.netlify.app',
+]);
+
 app.use((req, res, next) => {
   const origin = req.headers.origin || '';
-  const allowed = [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'https://tsc2025.netlify.app',
-    'https://www.thesupremecollective.co.uk',
-    'https://tsc2025-admin-portal.netlify.app',
-  ];
-  if (!origin || allowed.includes(origin)) {
+
+  // Echo the Origin only if it's allowed, or allow * for tools without Origin
+  if (!origin || CORS_WHITELIST.has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
   }
+
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, token');
   res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
-  // we are not using cookies for this flow
-  res.setHeader('Access-Control-Allow-Credentials', 'false');
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  // ⚠️ IMPORTANT: Do NOT set Access-Control-Allow-Credentials unless it's "true".
+  // We aren't using cookies for this flow, so omit it entirely.
+
+  // CORS debug: log origin and the ACAO we send
+  if (req.method !== 'OPTIONS') {
+    console.log(`🌐 CORS: ${req.method} ${req.url} | origin=${origin || 'n/a'}`);
+  }
+
+  if (req.method === 'OPTIONS') {
+    const acao = res.getHeader('Access-Control-Allow-Origin');
+    console.log(`   ↳ preflight ACAO=${acao || '(none)'}`);
+    return res.sendStatus(204);
+  }
+
+  // After the response goes out, log the ACAO value that actually went out
+  const _end = res.end;
+  res.end = function (...args) {
+    const acao = res.getHeader('Access-Control-Allow-Origin');
+    console.log(`   ↳ response ACAO=${acao || '(none)'}`);
+    _end.apply(this, args);
+  };
+
   next();
 });
 
-// ---- CORS (must be before any routes) ----
-const corsOptions = {
-  origin: (origin, cb) => {
-    const white = [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'https://tsc2025.netlify.app',
-      'https://www.thesupremecollective.co.uk',
-      'https://tsc2025-admin-portal.netlify.app',
-    ];
-    if (!origin || white.includes(origin)) return cb(null, true);
+/* ---- cors package (secondary; mirrors whitelist, handles edge cases) ---- */
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin || CORS_WHITELIST.has(origin)) return cb(null, true);
     return cb(new Error(`CORS blocked origin: ${origin}`));
   },
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization','token'],
-  credentials: false,
-};
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+  credentials: false, // no cookies in this flow
+}));
+app.options('*', cors()); // generic preflight passthrough
+
+
 
 // ---- standard middleware ----
 app.use(cookieParser());
@@ -108,19 +126,6 @@ app.use(express.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
-// request logging (handy to see Origin and response header)
-app.use((req, res, next) => {
-  req._rid = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-  console.log(`🔍 [${req._rid}] ${req.method} ${req.url} | origin: ${req.headers.origin || 'n/a'}`);
-  // Log the ACAO we end up sending
-  const _end = res.end;
-  res.end = function (...args) {
-    const acao = res.getHeader('Access-Control-Allow-Origin');
-    if (acao) console.log(`   ↳ ACAO sent: ${acao}`);
-    _end.apply(this, args);
-  };
-  next();
-});
 
 const port = process.env.PORT || 4000;
 
