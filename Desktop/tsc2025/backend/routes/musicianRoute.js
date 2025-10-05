@@ -1,5 +1,5 @@
 import express from "express";
-import multer from "multer";      // needed for the error handler that checks instanceof multer.MulterError
+import multer from "multer";
 import mongoose from "mongoose";
 import { emailContract } from "../controllers/musicianController.js";
 import upload from "../middleware/multer.js";
@@ -8,59 +8,17 @@ import verifyToken from "../middleware/musicianAuth.js";
 import musicianModel from "../models/musicianModel.js";
 import actModel from "../models/actModel.js";
 import PendingSong from "../models/pendingSongModel.js";
-import { appendDeputyRepertoire } from "../controllers/musicianController.js";
-import { suggestDeputies } from "../controllers/musicianController.js";
-
-
+import { appendDeputyRepertoire, suggestDeputies } from "../controllers/musicianController.js";
 import {
-  addAct,
-  listActs,
-  removeAct,
-  singleAct,
-  updateActStatus,
-  registerMusician,
-  loginMusician,
-  saveActDraft,
-  saveAmendmentDraft,
-  approveAmendment, 
-  registerDeputy,
-  listPendingDeputies,
-  approveDeputy,
-  rejectDeputy,
-  updateAct,
-  rejectAct,
-  refreshAccessToken,
-  logoutMusician,
-  getDeputyById
+  addAct, listActs, removeAct, singleAct, updateActStatus,
+  registerMusician, loginMusician, saveActDraft, saveAmendmentDraft,
+  approveAmendment, registerDeputy, listPendingDeputies, approveDeputy,
+  rejectDeputy, updateAct, rejectAct, refreshAccessToken, logoutMusician, getDeputyById
 } from "../controllers/musicianController.js";
-
-
-
 
 const router = express.Router();
 
-
-// ---- Route-level CORS headers ----
-const ALLOWED = new Set([
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'https://tsc2025.netlify.app',
-  'https://www.thesupremecollective.co.uk',
-  'https://tsc2025-admin-portal.netlify.app',
-]);
-
-router.use((req, res, next) => {
-  const origin = req.headers.origin || '';
-  if (!origin || ALLOWED.has(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-  }
-  res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, token');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
-  next();
-});
+// ⚠️ removed the router.use(...) CORS shim – global CORS in server.js handles it
 
 const uploadFields = upload.fields([
   { name: "images", maxCount: 30 },
@@ -79,7 +37,6 @@ const uploadFields = upload.fields([
   { name: "digitalWardrobeSessionAllBlack", maxCount: 30 },
   { name: "additionalImages", maxCount: 50 },
 ]);
-
 
 /* ---------------- AUTH (musician) ---------------- */
 router.post("/auth/register", registerMusician);
