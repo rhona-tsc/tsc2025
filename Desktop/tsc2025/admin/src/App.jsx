@@ -26,7 +26,13 @@ import Security from "./pages/Security";
 import BookingBoard from "./pages/BookingBoard";
 import EnquiryBoard from "./pages/EnquiryBoard";
 
-export const backendUrl = import.meta.env.VITE_BACKEND_URL;
+export const backendUrl =
+  import.meta.env.VITE_BACKEND_URL || "https://tsc2025.onrender.com";
+
+if (!import.meta.env.VITE_BACKEND_URL) {
+  console.warn("VITE_BACKEND_URL missing; using default:", backendUrl);
+}
+
 export const currency = "£";
 
 // 👇 helper to decode token once
@@ -70,6 +76,7 @@ const App = () => {
   const [password, setPassword] = useState(initialUser.password || "");
   const [hydrated, setHydrated] = useState(true); // true because we already set from token synchronously
 
+  
   const handleLogout = () => {
     setToken("");
     localStorage.clear();
