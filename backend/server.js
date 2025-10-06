@@ -1,4 +1,5 @@
 // backend/server.js
+// backend/server.js
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
@@ -58,8 +59,10 @@ const CORS_WHITELIST = new Set([
   'http://localhost:5173',
   'http://localhost:5174',
   'https://tsc2025.netlify.app',
-  'https://www.thesupremecollective.co.uk',
   'https://tsc2025-admin-portal.netlify.app',
+  'https://tsc2025.onrender.com',
+  'https://www.thesupremecollective.co.uk',
+  'https://api.thesupremecollective.co.uk',
 ]);
 
 const corsOptions = {
@@ -69,18 +72,24 @@ const corsOptions = {
     return cb(new Error(`CORS blocked origin: ${origin}`));
   },
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization','token'],
+  allowedHeaders: ['Content-Type','Authorization','token','X-Requested-With'],
   credentials: false, // not using cookies for admin portal login flow
+  optionsSuccessStatus: 204,
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));       // preflight handler
-app.use((req, res, next) => {              // cache variance + tiny debug
+app.options('*', cors(corsOptions)); // generic preflight
+app.options('/api/musician-login/*', cors(corsOptions), (_req, res) => res.sendStatus(204)); // explicit preflight for login
+
+// Render/Cloudflare often sit behind proxies
+app.set('trust proxy', 1);
+
+// tiny debug and cache-variance
+app.use((req, res, next) => {
   res.setHeader('Vary', 'Origin');
   if (req.method !== 'OPTIONS') {
     console.log(`🌐 CORS: ${req.method} ${req.url} | origin=${req.headers.origin || 'n/a'}`);
   }
-  // Log which ACAO we actually send back
   const _end = res.end;
   res.end = function (...args) {
     const acao = res.getHeader('Access-Control-Allow-Origin');
@@ -110,6 +119,7 @@ cloudinary.config({
   api_key: process.env.REACT_APP_CLOUDINARY_API_KEY,
   api_secret: process.env.REACT_APP_CLOUDINARY_SECRET_KEY,
 });
+
 
 /* -------------------------------------------------------------------------- */
 /*                                   Routes                                   */
