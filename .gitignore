@@ -1,0 +1,15 @@
+
+# Secrets
+backend/.env
+.env
+# never commit env/secrets
+.env
+**/.env
+credentials.json
+*.pem
+*.p12
+
+# node stuff
+node_modules/
+dist/
+build/
