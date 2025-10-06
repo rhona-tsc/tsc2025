@@ -40,7 +40,7 @@ import AdditionalRoleInput from "./BandMemberFields/AdditionalRoleInput";
 import PostCodeInput from "./BandMemberFields/PostCodeInput";
 import HaveMixingConsoleCheckbox from "./BandMemberFields/HaveMixingConsoleCheckbox";
 import HasDJBoothCheckbox from "./BandMemberFields/HasDJBoothCheckbox";
-import HasDjTableCheckbox from "./BandMemberFields/HasDJTableCheckbox";
+import HasDjTableCheckbox from "./BandMemberFields/HasDjTableCheckbox";
 
 import DeputiesInput from "./BandMemberFields/DeputiesInput";
 import RoamingPercussion from "./RoamingPercussion";
