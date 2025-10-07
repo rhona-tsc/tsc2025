@@ -89,7 +89,10 @@ if (!Array.isArray(smallestLineup.bandMembers)) {
 
         // Log destination before fetch
         console.log("🚚 Fetching travel data:", { origin: postCode, destination, date: selectedDate });
-        const res = await fetch(`/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`);
+        
+        const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
+const res = await fetch(`${base}/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`);
+
         const data = await res.json();
         const distanceMeters = data?.rows?.[0]?.elements?.[0]?.distance?.value || 0;
         const distanceMiles = distanceMeters / 1609.34;

@@ -781,9 +781,7 @@ const mapTwilioToEnquiryStatus = (s) => {
   return "queued";
 };
 
-const BASE_URL = (process.env.BACKEND_URL || "http://localhost:4000").replace(
-  /\/$/,
-  ""
+ const BASE_URL = (process.env.BACKEND_PUBLIC_URL || process.env.BACKEND_URL || process.env.INTERNAL_BASE_URL || "http://localhost:4000").replace(/\/$/, "");
 );
 
 const NORTHERN_COUNTIES = new Set([

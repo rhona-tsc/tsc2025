@@ -71,6 +71,8 @@ const [availLoading, setAvailLoading] = useState(false);
       delete updated[actId];
     }
 
+    const api = (p) => `${backendUrl.replace(/\/+$/, '')}/${String(p).replace(/^\/+/, '')}`;
+    
     // Split extras and ceremony/afternoon sets correctly
     const allSelectedExtras = [];
     const allAfternoonSets = [];

@@ -2,12 +2,14 @@ import axios from 'axios';
 
 export const getDrivingData = async (fromPostcode, toPostcode) => {
   try {
-    const response = await axios.get('//api/travel/get-travel-data', {
-      params: {
-        origins: fromPostcode,
-        destinations: toPostcode,
-      },
-    });
+  const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
+  const response = await axios.get(`${base}/api/travel/get-travel-data`, {
+    params: {
+      origin: fromPostcode,
+      destination: toPostcode,
+      date: new Date().toISOString().slice(0,10),
+    },
+  });
 
     const element = response.data?.rows?.[0]?.elements?.[0];
 

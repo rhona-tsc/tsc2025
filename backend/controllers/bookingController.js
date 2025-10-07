@@ -265,8 +265,8 @@ const baseWithEssentials = base + essentialAddOns;
           destination,
           date: String(booking?.date || booking?.eventDate || new Date()),
         });
-        const r = await fetch(`/api/travel/get-travel-data?${qs.toString()}`);
-        const data = await r.json();
+const _base = (process.env.INTERNAL_BASE_URL || process.env.BACKEND_PUBLIC_URL || process.env.BACKEND_URL || "http://localhost:4000").replace(/\/+$/, "");
+  const r = await fetch(`${_base}/api/travel/get-travel-data?${qs.toString()}`);        const data = await r.json();
         const distanceMeters = data?.outbound?.distance?.value || 0;
         const miles = distanceMeters / 1609.34;
         travel = miles * Number(act.costPerMile) * 25;

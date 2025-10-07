@@ -69,7 +69,7 @@ const api = (path) =>
     // 2) fetch fresh
     setAvailLoading(true);
     try {
-const r = await fetch(api(`api/availability/acts-by-date?date=${encodeURIComponent(d)}`));
+const r = await fetch(`${backendUrl.replace(/\/+$/, '')}/api/travel/get-travel-data?date=${encodeURIComponent(d)}`);
       const j = await r.json();
 
       const map = {};
