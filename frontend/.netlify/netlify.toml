@@ -28,9 +28,9 @@ command = "npm run build"
 
 [[redirects]]
 from = "/api/*"
-to = "https://b8b66c3c108b.ngrok-free.app/api/:splat"
+to = "https://tsc2025.onrender.com/:splat"
 status = 200.0
-force = false
+force = true
 
 [redirects.query]
 
