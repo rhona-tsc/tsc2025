@@ -7,7 +7,8 @@ import { useNavigate } from "react-router-dom";
 import { postcodes } from "../assets/assets";
 import calculateActPricing from "./utils/pricing";
 import axios from "axios";
-import { backendUrl } from "../App";
+
+const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
 // Ensure all API requests hit the backend origin, not the Netlify origin
 const api = (p) => `${backendUrl}/${String(p).replace(/^\/+/, "")}`;
