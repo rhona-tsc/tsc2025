@@ -72,7 +72,7 @@ const [availLoading, setAvailLoading] = useState(false);
     }
 
     const api = (p) => `${backendUrl.replace(/\/+$/, '')}/${String(p).replace(/^\/+/, '')}`;
-    
+
     // Split extras and ceremony/afternoon sets correctly
     const allSelectedExtras = [];
     const allAfternoonSets = [];
@@ -139,7 +139,9 @@ const loadAvailabilityForDate = async (dateISO) => {
 
   setAvailLoading(true);
   try {
-    const r = await fetch(`/api/availability/acts-by-date?date=${encodeURIComponent(d)}`);
+    const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
+    const url = `${base}/api/availability/acts-by-date?date=${encodeURIComponent(d)}`;
+    const r = await fetch(url, { headers: { accept: "application/json" } });
     const j = await r.json();
 
     // Tri-state map: false = explicitly unavailable, true = explicitly available, undefined = unknown
@@ -415,149 +417,154 @@ const isActAvailableForSelectedDate = (actId) =>
     return !!shortlistItems[actId];
   };
 
-  const toggleShortlist = async (actId, lineup) => {
-    const act = acts.find((a) => a._id === actId);
-    const isAlreadyShortlisted = shortlistItems[actId];
+ const toggleShortlist = async (actId, lineup) => {
+  const act = acts.find((a) => a._id === actId);
+  const isAlreadyShortlisted = shortlistItems[actId];
 
-    if (isAlreadyShortlisted) {
-      const updated = { ...shortlistItems };
-      delete updated[actId];
-      setShortlistItems(updated);
-    } else {
-      const newShortlist = { ...shortlistItems, [actId]: { [lineup]: 1 } };
-      setShortlistItems(newShortlist);
+  // helper: join backend base + path safely
+  const api = (p) =>
+    `${(backendUrl || "").replace(/\/+$/, "")}/${String(p).replace(/^\/+/, "")}`;
 
-      // ✅ Send WhatsApp message
+  if (isAlreadyShortlisted) {
+    const updated = { ...shortlistItems };
+    delete updated[actId];
+    setShortlistItems(updated);
+    return;
+  }
+
+  const newShortlist = { ...shortlistItems, [actId]: { [lineup]: 1 } };
+  setShortlistItems(newShortlist);
+
+  // ✅ Send WhatsApp message
+  try {
+    const vocalRoles = [
+      "Lead Male Vocal",
+      "Lead Female Vocal",
+      "Lead Vocal",
+      "vocalist-guitarist",
+    ];
+
+    // Biggest lineup by number of members
+    const largestLineup = act.lineups.reduce(
+      (a, b) => (b.bandMembers?.length || 0) > (a.bandMembers?.length || 0) ? b : a,
+      act.lineups[0]
+    );
+
+    const vocalists = (largestLineup.bandMembers || []).filter((m) =>
+      vocalRoles.includes(m.instrument)
+    );
+
+    const recipients =
+      vocalists.length > 0
+        ? vocalists
+        : [largestLineup.bandMembers?.[0]].filter(Boolean);
+
+    // --- Travel fee calc ----------------------------------------------------
+    let travelFee = 0;
+    const selectedCounty = selectedAddress.split(",").slice(-2)[0]?.trim() || "";
+    const memberPostcodes = recipients.map((m) => m.postCode).filter(Boolean);
+
+    // helper to fetch travel JSON safely and handle HTML errors
+    const fetchTravel = async (origin, destination, dateISO) => {
+      const url = api(
+        `api/travel/get-travel-data?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(
+          destination
+        )}&date=${encodeURIComponent(dateISO)}`
+      );
+      const r = await fetch(url, { headers: { accept: "application/json" } });
+      const text = await r.text();
+      if (!r.ok) throw new Error(`travel http ${r.status}`);
+      // robust JSON parse (avoid HTML 404 pages)
       try {
-        const vocalRoles = [
-          "Lead Male Vocal",
-          "Lead Female Vocal",
-          "Lead Vocal",
-          "vocalist-guitarist",
-        ];
+        return JSON.parse(text);
+      } catch {
+        throw new Error("travel: invalid JSON");
+      }
+    };
 
-        // Select the biggest lineup by number of band members
-        const largestLineup = act.lineups.reduce(
-          (a, b) =>
-            (b.bandMembers?.length || 0) > (a.bandMembers?.length || 0) ? b : a,
-          act.lineups[0]
-        );
+    if (act.useCountyTravelFee && act.countyFees) {
+      const countyKey = selectedCounty.toLowerCase();
+      const feePerMember = act.countyFees[countyKey] || 0;
+      travelFee = feePerMember * memberPostcodes.length;
+    } else if (act.costPerMile > 0) {
+      // cost-per-mile path (one-way distance * costPerMile * 2)
+      for (const postCode of memberPostcodes) {
+        const data = await fetchTravel(postCode, selectedAddress, selectedDate);
+        // prefer normalized shape
+        const meters =
+          data?.outbound?.distance?.value ??
+          data?.rows?.[0]?.elements?.[0]?.distance?.value ??
+          0;
+        const miles = meters / 1609.34;
+        travelFee += miles * Number(act.costPerMile || 0) * 2;
+      }
+    } else {
+      // MU-rate path using both legs
+      for (const member of recipients) {
+        const postCode = member.postCode;
+        if (!postCode) continue;
 
-        const vocalists = (largestLineup.bandMembers || []).filter((member) =>
-          vocalRoles.includes(member.instrument)
-        );
+        const data = await fetchTravel(postCode, selectedAddress, selectedDate);
+        const outbound = data?.outbound;
+        const returnTrip = data?.returnTrip;
 
-        const recipients =
-          vocalists.length > 0
-            ? vocalists
-            : [largestLineup.bandMembers?.[0]].filter(Boolean);
+        if (!outbound || !returnTrip) continue;
 
-        // New travel fee calculation block
-        let travelFee = 0;
-        const selectedCounty =
-          selectedAddress.split(",").slice(-2)[0]?.trim() || "";
-        const memberPostcodes = recipients
-          .map((member) => member.postCode)
-          .filter(Boolean);
+        const outboundDistance = outbound?.distance?.value;
+        const returnDistance = returnTrip?.distance?.value;
+        const outboundDuration = outbound?.duration?.value;
+        const returnDuration = returnTrip?.duration?.value;
 
-        if (act.useCountyTravelFee && act.countyFees) {
-          const countyKey = selectedCounty.toLowerCase();
-          const feePerMember = act.countyFees[countyKey] || 0;
-          travelFee = feePerMember * memberPostcodes.length;
-        } else if (act.costPerMile > 0) {
-          for (const postCode of memberPostcodes) {
-            const res = await fetch(
-              `/api/travel/get-travel-data?origin=${encodeURIComponent(
-                postCode
-              )}&destination=${encodeURIComponent(
-                selectedAddress
-              )}&date=${encodeURIComponent(selectedDate)}`
-            );
-            const data = await res.json();
-            const distanceMeters =
-              data?.rows?.[0]?.elements?.[0]?.distance?.value || 0;
-            const distanceMiles = distanceMeters / 1609.34;
-            travelFee += distanceMiles * act.costPerMile * 2;
-          }
-        } else {
-          for (const member of recipients) {
-            const postCode = member.postCode;
-            if (!postCode) continue;
-            const res = await fetch(
-              `/api/travel/get-travel-data?origin=${encodeURIComponent(
-                postCode
-              )}&destination=${encodeURIComponent(
-                selectedAddress
-              )}&date=${encodeURIComponent(selectedDate)}`
-            );
-            const data = await res.json();
-
-            const outbound = data?.outbound;
-            const returnTrip = data?.returnTrip;
-
-            if (!outbound || !returnTrip) {
-              continue;
-            }
-
-            const outboundDistance = outbound?.distance?.value;
-            const returnDistance = returnTrip?.distance?.value;
-            const outboundDuration = outbound?.duration?.value;
-            const returnDuration = returnTrip?.duration?.value;
-
-            if (
-              typeof outboundDistance !== "number" ||
-              typeof returnDistance !== "number" ||
-              typeof outboundDuration !== "number" ||
-              typeof returnDuration !== "number"
-            ) {
-              continue;
-            }
-
-            const totalDistanceMiles =
-              (outboundDistance + returnDistance) / 1609.34;
-            const totalDurationHours =
-              (outboundDuration + returnDuration) / 3600;
-
-            const fuelFee = totalDistanceMiles * 0.56;
-            const timeFee = totalDurationHours * 13.23;
-            const lateFee = returnDuration / 3600 > 1 ? 136 : 0;
-            const tollFee =
-              (outbound.fare?.value || 0) + (returnTrip.fare?.value || 0);
-
-            travelFee += fuelFee + timeFee + lateFee + tollFee;
-          }
+        if (
+          typeof outboundDistance !== "number" ||
+          typeof returnDistance !== "number" ||
+          typeof outboundDuration !== "number" ||
+          typeof returnDuration !== "number"
+        ) {
+          continue;
         }
 
-        const baseFee = largestLineup?.base_fee?.[0]?.total_fee || 0;
+        const totalDistanceMiles =
+          (outboundDistance + returnDistance) / 1609.34;
+        const totalDurationHours =
+          (outboundDuration + returnDuration) / 3600;
 
-        const total = Math.ceil(baseFee + travelFee); // no margin added for WhatsApp quote
+        const fuelFee = totalDistanceMiles * 0.56;
+        const timeFee = totalDurationHours * 13.23;
+        const lateFee = returnDuration / 3600 > 1 ? 136 : 0;
+        const tollFee =
+          (outbound.fare?.value || 0) + (returnTrip.fare?.value || 0);
 
-        const formattedDate = formatDateToWords(selectedDate);
-
-        // Shorten the address to just the last two parts (usually city and postcode)
-        let shortAddress = selectedAddress
-          .split(",")
-          .slice(-2)
-          .join(",")
-          .trim();
-        if (shortAddress.toLowerCase().endsWith(", uk")) {
-          shortAddress = shortAddress.replace(/,\s*UK$/i, "");
-        }
-
-        for (const member of recipients) {
-          const message = `Hey ${member.firstName}! Are you available for a gig on ${formattedDate} in ${shortAddress} for £${total}? Reply: 
-  YES, 
-  NO (i.e. I'm available for this date just not for this location), or 
-  UNAVAILABLE.`;
-
-          await axios.post(`${backendUrl}/api/shortlist/notify-musician`, {
-            phone: member.phoneNumber,
-            message,
-          });
-        }
-      } catch (err) {}
+        travelFee += fuelFee + timeFee + lateFee + tollFee;
+      }
     }
-  };
+
+    const baseFee = largestLineup?.base_fee?.[0]?.total_fee || 0;
+    const total = Math.ceil(baseFee + travelFee); // no margin for WhatsApp quote
+    const formattedDate = formatDateToWords(selectedDate);
+
+    // shorten address to last two parts
+    let shortAddress = selectedAddress.split(",").slice(-2).join(",").trim();
+    if (shortAddress.toLowerCase().endsWith(", uk")) {
+      shortAddress = shortAddress.replace(/,\s*UK$/i, "");
+    }
+
+    for (const member of recipients) {
+      const message = `Hey ${member.firstName}! Are you available for a gig on ${formattedDate} in ${shortAddress} for £${total}? Reply: 
+YES, 
+NO (i.e. I'm available for this date just not for this location), or 
+UNAVAILABLE.`;
+
+      await axios.post(api("api/shortlist/notify-musician"), {
+        phone: member.phoneNumber,
+        message,
+      });
+    }
+  } catch (err) {
+    // swallow (non-fatal for UI), but log for debugging
+    console.warn("toggleShortlist notify error:", err?.message || err);
+  }
+};
 
   const [shortlistedActs, setShortlistedActs] = useState([]);
 

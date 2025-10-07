@@ -1,7 +1,3 @@
-// frontend/src/pages/utils/pricing.jsx
-// Optional: Outcode → County mapping
-import outcodeToCounty from "./outcodeToCounty";
-
 const calculateActPricing = async (act, selectedCounty, selectedAddress, selectedDate, selectedLineup) => {
   // Guard
   if (!act || !selectedLineup) {
@@ -96,6 +92,10 @@ const calculateActPricing = async (act, selectedCounty, selectedAddress, selecte
     }
     return "";
   };
+
+  // 🔗 Backend base for travel API
+  const BASE_TRAVEL = (import.meta.env.VITE_BACKEND_URL || window.__BACKEND_URL__ || "").replace(/\/+$/, "");
+  const api = (p) => (BASE_TRAVEL ? `${BASE_TRAVEL}${p.startsWith("/") ? p : `/${p}`}` : p);
 
   let travelFee = 0;
   let travelCalculated = false;
@@ -202,7 +202,7 @@ const calculateActPricing = async (act, selectedCounty, selectedAddress, selecte
       if (!postCode || !destination) continue;
 
       const res = await fetch(
-        `/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`
+        api(`/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`)
       );
       const data = await res.json();
       const distanceMeters = data?.outbound?.distance?.value || 0;
@@ -222,7 +222,7 @@ const calculateActPricing = async (act, selectedCounty, selectedAddress, selecte
       if (!postCode || !destination) continue;
 
       const res = await fetch(
-        `/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`
+        api(`/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`)
       );
       const data = await res.json();
       const outbound = data?.outbound;
@@ -247,52 +247,3 @@ const calculateActPricing = async (act, selectedCounty, selectedAddress, selecte
 
   return { total: totalPrice, travelCalculated };
 };
-
-export default calculateActPricing;
-
-// Extras
-export function calculateExtraPrice({ extra, act, lineup, address, date }) {
-  const key = extra?.key;
-
-  const lineupSize =
-    Number(lineup?.bandMembers?.length) ||
-    Number(lineup?.actSize) ||
-    Number(lineup?.actSizeCount) ||
-    0;
-
-  const getBaseFromActExtras = (k) => {
-    const extras = act?.extras;
-    if (!extras) return 0;
-    const raw = typeof extras.get === "function" ? extras.get(k) : extras?.[k];
-    if (typeof raw === "number") return Number(raw) || 0;
-    if (raw && typeof raw === "object") {
-      const price = raw.price != null ? Number(raw.price) : 0;
-      return isNaN(price) ? 0 : price;
-    }
-    return 0;
-  };
-
-  // Per-member-per-60
-  if (
-    key === "late_stay_60min_per_band_member" ||
-    key === "early_arrival_60min_per_band_member"
-  ) {
-    const base = getBaseFromActExtras(key);
-    const minutes = Number(extra?.minutes || 60);
-    const blocks = minutes / 60;
-    return base * lineupSize * blocks;
-  }
-
-  if (/_per_band_member$/.test(String(key || ""))) {
-    const base = getBaseFromActExtras(key);
-    const minutes = Number(extra?.minutes || 60);
-    const blocks = minutes / 60;
-    return base * lineupSize * blocks;
-  }
-
-  if (extra?.flatPrice != null) return Number(extra.flatPrice) || 0;
-
-  const fallbackBase =
-    extra?.basePrice != null ? Number(extra.basePrice) : getBaseFromActExtras(key);
-  return isNaN(fallbackBase) ? 0 : fallbackBase;
-}

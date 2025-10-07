@@ -235,8 +235,12 @@ app.get("/api/availability/acts-available", async (req, res) => {
   }
 });
 
+
 // Alias for legacy/alternate client
 app.get("/api/availability/acts-by-date", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, token, X-Requested-With");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   const date = String(req.query?.date || "").slice(0, 10);
   console.log("🗓️  GET /api/availability/acts-by-date (alias to acts-available)", { date });
   try {

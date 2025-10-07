@@ -2,30 +2,43 @@ import axios from 'axios';
 
 export const getDrivingData = async (fromPostcode, toPostcode) => {
   try {
-  const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
-  const response = await axios.get(`${base}/api/travel/get-travel-data`, {
-    params: {
-      origin: fromPostcode,
-      destination: toPostcode,
-      date: new Date().toISOString().slice(0,10),
-    },
-  });
+    const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
+    const url = `${base}/api/travel/get-travel-data`;
+    const date = new Date().toISOString().slice(0, 10);
 
-    const element = response.data?.rows?.[0]?.elements?.[0];
+    const response = await axios.get(url, {
+      params: { origin: fromPostcode, destination: toPostcode, date },
+      headers: { accept: "application/json" },
+    });
 
-    if (element?.status !== 'OK') {
-      throw new Error(`Google Maps error: ${element?.status}`);
+    const data = response?.data;
+
+    if (!data || typeof data !== "object") {
+      console.warn("⚠️ Invalid travel data response:", data);
+      return { distance: 0, duration: 0 };
     }
 
-    const distanceInMiles = element.distance.value / 1609.34; // meters to miles
-    const durationInMinutes = element.duration.value / 60; // seconds to minutes
+    // Handle both new and old response formats
+    let distanceMeters =
+      data?.outbound?.distance?.value ??
+      data?.rows?.[0]?.elements?.[0]?.distance?.value ??
+      0;
+    let durationSeconds =
+      data?.outbound?.duration?.value ??
+      data?.rows?.[0]?.elements?.[0]?.duration?.value ??
+      0;
+
+    const distanceInMiles = distanceMeters / 1609.34;
+    const durationInMinutes = durationSeconds / 60;
+
+    console.log(`🧭 Travel data fetched: ${distanceInMiles.toFixed(1)} mi, ${durationInMinutes.toFixed(0)} mins`);
 
     return {
       distance: distanceInMiles,
       duration: durationInMinutes,
     };
   } catch (error) {
-    console.error('🚨 Error getting driving data:', error);
+    console.error('🚨 Error getting driving data:', error?.message || error);
     return {
       distance: 0,
       duration: 0,

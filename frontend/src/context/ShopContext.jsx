@@ -52,41 +52,71 @@ const api = (path) =>
   `${backendUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
   // Fetch + cache availability map for a given date (YYYY-MM-DD or ISO)
-  const loadAvailabilityForDate = async (dateISO) => {
-    const d = String(dateISO || "").slice(0, 10);
-    if (!d) return;
-    const cacheKey = `availMap:${d}`;
+const loadAvailabilityForDate = async (dateISO) => {
+  const d = String(dateISO || "").slice(0, 10);
+  if (!d) return;
 
-    // 1) warm from cache if present
-    try {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && typeof parsed === "object") setAvailableMap(parsed);
-      }
-    } catch {}
+  const cacheKey = `availMap:${d}`;
 
-    // 2) fetch fresh
-    setAvailLoading(true);
-    try {
-const r = await fetch(`${backendUrl.replace(/\/+$/, '')}/api/travel/get-travel-data?date=${encodeURIComponent(d)}`);
-      const j = await r.json();
-
-      const map = {};
-      // backend can return explicit lists; normalise to boolean map
-      (j.unavailableActIds || []).forEach((id) => { map[id] = false; });
-      (j.availableActIds || []).forEach((id) => { if (!(id in map)) map[id] = true; });
-      if (!j.unavailableActIds && Array.isArray(j.actIds)) {
-        j.actIds.forEach((id) => { if (!(id in map)) map[id] = true; });
-      }
-
-      try { sessionStorage.setItem(cacheKey, JSON.stringify(map)); } catch {}
-      setAvailableMap(map);
-    } catch (e) {
-    } finally {
-      setAvailLoading(false);
+  // 1) Warm from cache if present (instant UI)
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && typeof parsed === "object") setAvailableMap(parsed);
     }
+  } catch {}
+
+  // Helper to build tri-state map from various backend shapes
+  const toMap = (payload = {}) => {
+    const map = {};
+    const unavailable = Array.isArray(payload.unavailableActIds) ? payload.unavailableActIds : [];
+    const available   = Array.isArray(payload.availableActIds)   ? payload.availableActIds   : [];
+    const actIds      = Array.isArray(payload.actIds)            ? payload.actIds            : [];
+
+    unavailable.forEach((id) => { map[id] = false; });
+    available.forEach((id)   => { if (!(id in map)) map[id] = true; });
+
+    // Compat: some endpoints only return actIds ⇒ treat as available
+    if (!payload.unavailableActIds && actIds.length) {
+      actIds.forEach((id) => { if (!(id in map)) map[id] = true; });
+    }
+    return map;
   };
+
+  setAvailLoading(true);
+  try {
+    // 2) Try the canonical acts-by-date endpoint
+    const url1 = api(`api/availability/acts-by-date?date=${encodeURIComponent(d)}`);
+    let res = await fetch(url1, { headers: { accept: "application/json" } });
+    let text = await res.text();
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; } catch {}
+
+    // 3) If missing (404) or not OK, attempt fallback to acts-available
+    if (!res.ok) {
+      if (res.status === 404) {
+        const url2 = api(`api/availability/acts-available?date=${encodeURIComponent(d)}`);
+        res = await fetch(url2, { headers: { accept: "application/json" } });
+        text = await res.text();
+        try { data = text ? JSON.parse(text) : {}; } catch {}
+      }
+      if (!res.ok) {
+        const msg = data?.message || data?.error || text || `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+    }
+
+    const map = toMap(data);
+    try { sessionStorage.setItem(cacheKey, JSON.stringify(map)); } catch {}
+    setAvailableMap(map);
+  } catch (e) {
+    console.warn("[avail] load failed:", e?.message || e);
+    // Keep any cached UI; don't overwrite with empty on error
+  } finally {
+    setAvailLoading(false);
+  }
+};
 
   // Re-load when date changes
   useEffect(() => {

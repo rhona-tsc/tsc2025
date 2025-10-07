@@ -337,70 +337,78 @@ useEffect(() => {
         }
       } catch {}
 
-      const url = api(`api/availability/acts-by-date?date=${encodeURIComponent(d)}`);
+      // Helper: normalize various backend response shapes into a tri-state map
+      const toMap = (payload = {}) => {
+        const map = {};
+        const unavailable = Array.isArray(payload.unavailableActIds) ? payload.unavailableActIds : [];
+        const available   = Array.isArray(payload.availableActIds)   ? payload.availableActIds   : [];
+        const actIds      = Array.isArray(payload.actIds)            ? payload.actIds            : [];
 
-      const res = await fetch(url);
-      const ct = String(res.headers.get("content-type") || "").toLowerCase();
-     
+        for (const id of unavailable) map[id] = false;
+        for (const id of available)   if (!(id in map)) map[id] = true;
 
-      // --- robust parse ---
+        // Compat: if only actIds present, treat those as available
+        if (!payload.unavailableActIds && actIds.length) {
+          for (const id of actIds) if (!(id in map)) map[id] = true;
+        }
+        return map;
+      };
+
+      // 1) Try canonical endpoint
+      let res = await fetch(
+        api(`api/availability/acts-by-date?date=${encodeURIComponent(d)}`),
+        { headers: { accept: "application/json" } }
+      );
       let bodyText = "";
       try { bodyText = await res.text(); } catch {}
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ${res.statusText}`);
-      }
+      let json = {};
+      try { json = bodyText ? JSON.parse(bodyText) : {}; } catch {}
 
-      let json;
-      if (!bodyText) {
-        json = {};
-      } else {
-        try {
-          json = JSON.parse(bodyText);
-        } catch (e) {
-          json = {};
+      // 2) Fallback to legacy alias if needed
+      if (!res.ok) {
+        if (res.status === 404) {
+          res = await fetch(
+            api(`api/availability/acts-available?date=${encodeURIComponent(d)}`),
+            { headers: { accept: "application/json" } }
+          );
+          bodyText = "";
+          try { bodyText = await res.text(); } catch {}
+          try { json = bodyText ? JSON.parse(bodyText) : {}; } catch {}
+        }
+        if (!res.ok) {
+          const msg = json?.message || json?.error || bodyText || `HTTP ${res.status}`;
+          throw new Error(msg);
         }
       }
 
       // Some backends wrap in { data: {...} }
       const payload = (json && typeof json === "object" && (json.data || json)) || {};
 
-      // Normalize possible shapes
-      const unavailable = Array.isArray(payload.unavailableActIds) ? payload.unavailableActIds : [];
-      const available   = Array.isArray(payload.availableActIds)   ? payload.availableActIds   : [];
-      const actIds      = Array.isArray(payload.actIds)            ? payload.actIds            : [];
+      // Build base map from API
+      const map = toMap(payload);
 
-     
+      // --- Merge availability from Act docs as a fallback/source-of-truth ---
+      const dateKey = d; // "YYYY-MM-DD"
+      for (const a of approvedActs) {
+        const rows = Array.isArray(a.availabilityByDate) ? a.availabilityByDate : [];
+        const matches = rows.filter(r => String(r.dateISO || "").slice(0,10) === dateKey);
+        if (matches.length) {
+          matches.sort((x,y) => new Date(x.setAt||0) - new Date(y.setAt||0));
+          const latest = matches[matches.length - 1];
+          const st = (latest?.status || "").toLowerCase(); // "available" | "unavailable"
+          if (st === "unavailable") {
+            map[a._id] = false;              // ❌ hide
+          } else if (st === "available" && map[a._id] !== false) {
+            map[a._id] = true;               // ✅ show (unless already false)
+          }
+        }
+      }
 
-      // --- Build tri-state map from server payload (you already have this above) ---
-const map = {};
-for (const id of unavailable) map[id] = false;
-for (const id of available)   if (!(id in map)) map[id] = true;
-if (!payload.unavailableActIds && actIds.length) {
-  for (const id of actIds) if (!(id in map)) map[id] = true;
-}
-
-// --- 👇 NEW: merge availability from Act docs as a fallback/source-of-truth ---
-const dateKey = d; // your selected date "YYYY-MM-DD"
-for (const a of approvedActs) {
-  const rows = Array.isArray(a.availabilityByDate) ? a.availabilityByDate : [];
-  // pick latest entry for that day
-  const matches = rows.filter(r => String(r.dateISO || "").slice(0,10) === dateKey);
-  if (matches.length) {
-    matches.sort((x,y) => new Date(x.setAt||0) - new Date(y.setAt||0));
-    const latest = matches[matches.length - 1];
-    const st = (latest?.status || "").toLowerCase(); // "available" | "unavailable"
-    if (st === "unavailable") {
-      map[a._id] = false;              // ❌ hide
-    } else if (st === "available" && map[a._id] !== false) {
-      map[a._id] = true;               // ✅ show (unless already false)
-    }
-  }
-}
-
-try { sessionStorage.setItem(cacheKey, JSON.stringify(map)); } catch {}
-setAvailableMap(map);
+      try { sessionStorage.setItem(cacheKey, JSON.stringify(map)); } catch {}
+      setAvailableMap(map);
     } catch (e) {
-      setAvailableMap({}); // no data ⇒ don’t hide anyone
+      console.warn("[avail] load failed:", e?.message || e);
+      // Keep any cached UI; don't clobber with empty map on error
     } finally {
       setAvailLoading(false);
     }

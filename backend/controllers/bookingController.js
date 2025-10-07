@@ -205,10 +205,10 @@ const getCountyFeeFromMap = (fees, county) => {
 
 // ---- Member fee with travel (county table first, else per-mile) ----
 async function computeMemberFeeDetailed({ member, lineup, booking, act }, dbgTag = "") {
-    logStart("computeMeMberFeeDetailed", );
+  logStart("computeMemberFeeDetailed");
 
+  // --- Base fee logic ---
   const baseMemberFee = Number(member?.fee ?? 0);
-
   const performers = Array.isArray(lineup?.bandMembers)
     ? lineup.bandMembers.filter((bm) => {
         const role = String(bm?.instrument || "").toLowerCase();
@@ -223,29 +223,31 @@ async function computeMemberFeeDetailed({ member, lineup, booking, act }, dbgTag
   } else if (Number(booking?.totals?.fullAmount ?? booking?.amount ?? 0) > 0 && performers > 0) {
     fallbackPerHead = Math.ceil(Number(booking?.totals?.fullAmount ?? booking?.amount) / performers);
   }
-const base = baseMemberFee > 0 ? baseMemberFee : fallbackPerHead;
 
-// ✅ add any essential role add-ons (e.g., Sound Engineering)
-const essentialAddOns = Array.isArray(member?.additionalRoles)
-  ? member.additionalRoles.reduce((sum, r) => {
-      const isEssential = r?.isEssential === true || /essential/i.test(String(r?.role||""));
-      const add = Number(r?.additionalFee || 0);
-      return isEssential && Number.isFinite(add) ? sum + add : sum;
-    }, 0)
-  : 0;
+  const base = baseMemberFee > 0 ? baseMemberFee : fallbackPerHead;
 
-const baseWithEssentials = base + essentialAddOns;
-  // travel
+  // --- Essential add-ons (e.g. Sound Engineer role) ---
+  const essentialAddOns = Array.isArray(member?.additionalRoles)
+    ? member.additionalRoles.reduce((sum, r) => {
+        const isEssential = r?.isEssential === true || /essential/i.test(String(r?.role || ""));
+        const add = Number(r?.additionalFee || 0);
+        return isEssential && Number.isFinite(add) ? sum + add : sum;
+      }, 0)
+    : 0;
+
+  const baseWithEssentials = base + essentialAddOns;
+
+  // --- Travel fee logic ---
   let travel = 0;
   let travelSource = "none";
   const address = booking?.venueAddress || booking?.venue || "";
 
-  // 1) county by address name OR outcode via your table
   const countyByName = guessCountyFromAddress(address, act?.countyFees);
   const outcode = extractOutcode(address);
   const countyByOut = countyFromOutcode(outcode);
   const county = countyByName || countyByOut;
 
+  // 1️⃣ County-based fee
   if (act?.useCountyTravelFee && county) {
     const feePerMember = getCountyFeeFromMap(act?.countyFees, county);
     if (feePerMember > 0) {
@@ -254,10 +256,14 @@ const baseWithEssentials = base + essentialAddOns;
     }
   }
 
-  // 2) cost-per-mile fallback
+  // 2️⃣ Cost-per-mile fallback
   if (travel === 0 && Number(act?.costPerMile) > 0) {
     const origin = member?.postCode;
-    const destination = typeof address === "string" ? address : (address?.postcode || address?.address || "");
+    const destination =
+      typeof address === "string"
+        ? address
+        : address?.postcode || address?.address || "";
+
     if (origin && destination) {
       try {
         const qs = new URLSearchParams({
@@ -265,36 +271,65 @@ const baseWithEssentials = base + essentialAddOns;
           destination,
           date: String(booking?.date || booking?.eventDate || new Date()),
         });
-const _base = (process.env.INTERNAL_BASE_URL || process.env.BACKEND_PUBLIC_URL || process.env.BACKEND_URL || "http://localhost:4000").replace(/\/+$/, "");
-  const r = await fetch(`${_base}/api/travel/get-travel-data?${qs.toString()}`);        const data = await r.json();
-        const distanceMeters = data?.outbound?.distance?.value || 0;
+
+        // ✅ unified backend URL logic (same as all other travel functions)
+        const BASE = (
+          process.env.BACKEND_PUBLIC_URL ||
+          process.env.BACKEND_URL ||
+          process.env.INTERNAL_BASE_URL ||
+          "https://tsc2025.onrender.com"
+        ).replace(/\/+$/, "");
+
+        const res = await fetch(`${BASE}/api/travel/get-travel-data?${qs.toString()}`, {
+          headers: { accept: "application/json" },
+        });
+
+        const text = await res.text();
+        let data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch {}
+
+        if (!res.ok) throw new Error(`travel http ${res.status}`);
+
+        // --- Support both new + old shapes ---
+        const firstEl = data?.rows?.[0]?.elements?.[0];
+        const outbound = data?.outbound || (
+          firstEl?.distance && firstEl?.duration
+            ? { distance: firstEl.distance, duration: firstEl.duration, fare: firstEl.fare }
+            : undefined
+        );
+
+        const distanceMeters = outbound?.distance?.value || 0;
         const miles = distanceMeters / 1609.34;
-        travel = miles * Number(act.costPerMile) * 25;
+
+        travel = miles * Number(act.costPerMile) * 25; // round trip multiplier
         travelSource = `perMile:${miles.toFixed(1)}mi`;
-      } catch {
-        /* ignore */
+      } catch (err) {
+        console.warn("⚠️ Travel fetch failed:", err?.message || err);
       }
     }
   }
 
-const total = Math.round(baseWithEssentials + travel);
-if (process.env.DEBUG_FEE_LOGS === "1") {
-  console.log("[fee] member", {
-    dbgTag,
-    bookingId: booking?.bookingId,
-    name: member?.firstName || member?.instrument,
-    base,
-    essentialAddOns,
-    baseWithEssentials,
-    baseFrom: baseMemberFee > 0 ? "member.fee" : "fallbackPerHead",
-    travel: Math.round(travel),
-    travelSource,
-    county,
-    outcode,
-    lineupTotal,
-    performers,
-  });
+  // --- Final total ---
+  const total = Math.round(baseWithEssentials + travel);
+
+  if (process.env.DEBUG_FEE_LOGS === "1") {
+    console.log("[fee] member", {
+      dbgTag,
+      bookingId: booking?.bookingId,
+      name: member?.firstName || member?.instrument,
+      base,
+      essentialAddOns,
+      baseWithEssentials,
+      baseFrom: baseMemberFee > 0 ? "member.fee" : "fallbackPerHead",
+      travel: Math.round(travel),
+      travelSource,
+      county,
+      outcode,
+      lineupTotal,
+      performers,
+    });
   }
+
   return total;
 }
 

@@ -56,12 +56,29 @@ async function getTravelData(originPostcode, destination, dateISO) {
     destination,
     date: dateISO,
   }).toString();
-  // Make sure INTERNAL_BASE_URL is set (e.g. http://localhost:5000)
-  const base = process.env.INTERNAL_BASE_URL || "";
-  const url = `${base}/api/travel/get-travel-data?${qs}`;
-  const r = await fetch(url, { headers: { accept: "application/json" } });
-  if (!r.ok) throw new Error(`travel ${r.status}`);
-  return r.json();
+
+  // Unified backend base URL with sensible fallbacks
+  const BASE = (
+    process.env.BACKEND_PUBLIC_URL ||
+    process.env.BACKEND_URL ||
+    process.env.INTERNAL_BASE_URL ||
+    "https://tsc2025.onrender.com"
+  ).replace(/\/+$/, "");
+
+  const url = `${BASE}/api/travel/get-travel-data?${qs}`;
+
+  const res = await fetch(url, { headers: { accept: "application/json" } });
+
+  const text = await res.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch {}
+
+  if (!res.ok) {
+    const msg = data?.message || data?.error || text || `HTTP ${res.status}`;
+    throw new Error(`travel ${res.status} - ${msg}`);
+  }
+
+  return data; // supports both { outbound, returnTrip } and legacy { rows:[{elements:[...]}] }
 }
 
 /**

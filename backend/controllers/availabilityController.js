@@ -790,15 +790,44 @@ const NORTHERN_COUNTIES = new Set([
 
 
 
+// Availability controller: robust travel fetch that supports both API shapes
 const fetchTravel = async (origin, destination, dateISO) => {
-  const url = `${BASE_URL}/api/travel/get-travel-data?origin=${encodeURIComponent(
-    origin
-  )}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(
-    dateISO
-  )}`;
-  const res = await fetch(url);
+  const BASE = (
+    process.env.BACKEND_PUBLIC_URL ||
+    process.env.BACKEND_URL ||
+    process.env.INTERNAL_BASE_URL ||
+    "http://localhost:4000"
+  ).replace(/\/+$/, "");
+
+  const url = `${BASE}/api/travel/get-travel-data` +
+    `?origin=${encodeURIComponent(origin)}` +
+    `&destination=${encodeURIComponent(destination)}` +
+    `&date=${encodeURIComponent(dateISO)}`;
+
+  const res = await fetch(url, { headers: { accept: "application/json" } });
+  const text = await res.text();
+
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
+
   if (!res.ok) throw new Error(`travel http ${res.status}`);
-  return res.json(); 
+
+  // --- Normalize shapes ---
+  // Legacy: { rows:[{ elements:[{ distance, duration, fare? }] }] }
+  const firstEl = data?.rows?.[0]?.elements?.[0];
+
+  // Prefer new shape if present; otherwise build outbound from legacy element
+  const outbound = data?.outbound || (
+    firstEl?.distance && firstEl?.duration
+      ? { distance: firstEl.distance, duration: firstEl.duration, fare: firstEl.fare }
+      : undefined
+  );
+
+  // returnTrip only exists in the new shape
+  const returnTrip = data?.returnTrip;
+
+  // Return normalized plus raw for callers that need details
+  return { outbound, returnTrip, raw: data };
 };
 
 const computeMemberTravelFee = async ({
