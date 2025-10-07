@@ -7,6 +7,10 @@ import { useNavigate } from "react-router-dom";
 import { postcodes } from "../assets/assets";
 import calculateActPricing from "./utils/pricing";
 import axios from "axios";
+import { backendUrl } from "../App";
+
+// Ensure all API requests hit the backend origin, not the Netlify origin
+const api = (p) => `${backendUrl}/${String(p).replace(/^\/+/, "")}`;
 
 
 const Acts = () => {
@@ -243,7 +247,7 @@ const [availLoading, setAvailLoading] = useState(false);
           continue;
         }
         const res = await fetch(
-          `/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`
+          api(`api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`)
         );
         const data = await res.json();
         const distanceMeters =
@@ -265,7 +269,7 @@ const [availLoading, setAvailLoading] = useState(false);
           continue;
         }
         const res = await fetch(
-          `/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`
+          api(`api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`)
         );
         const data = await res.json();
         const outbound = data?.outbound;
@@ -332,7 +336,7 @@ useEffect(() => {
         }
       } catch {}
 
-      const url = `/api/availability/acts-by-date?date=${encodeURIComponent(d)}`;
+      const url = api(`api/availability/acts-by-date?date=${encodeURIComponent(d)}`);
 
       const res = await fetch(url);
       const ct = String(res.headers.get("content-type") || "").toLowerCase();
