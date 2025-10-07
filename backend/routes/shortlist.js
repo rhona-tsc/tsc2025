@@ -123,15 +123,34 @@ const sseNoCompression = (req, res, next) => {
 // Live subscribe to availability updates over SSE
 router.get('/availability/subscribe', sseNoCompression, (req, res) => {
   console.log('📡 SSE subscribe: /api/shortlist/availability/subscribe');
+  // Resolve ACAO dynamically – support multiple frontends
+  const ALLOWED_SSE_ORIGINS = new Set(
+    [
+      process.env.FRONTEND_URL,
+      'https://tsc2025.netlify.app',
+      'https://www.thesupremecollective.co.uk',
+      'https://thesupremecollective.co.uk',
+      'http://localhost:5173',
+      'http://localhost:5174'
+    ].filter(Boolean)
+  );
+  const reqOrigin = req.headers.origin || '';
+  const acao = ALLOWED_SSE_ORIGINS.has(reqOrigin)
+    ? reqOrigin
+    : (process.env.FRONTEND_URL || 'https://tsc2025.netlify.app');
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  // Allow Netlify (and your custom domain) to connect to SSE
-  res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'https://tsc2025.netlify.app');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Origin', acao);
+  // EventSource does not send cookies by default; no need for credentials
+  // If you later enable withCredentials on the client, flip this to 'true'
+  res.setHeader('Access-Control-Allow-Credentials', 'false');
   // Prevent proxy buffering (NGINX/Heroku/etc.)
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders?.();
+  console.log('   ↳ SSE ACAO:', acao);
 
   // Advise the client to retry quickly if the connection drops
   res.write('retry: 5000\n\n');
