@@ -7,10 +7,6 @@ import { useNavigate } from "react-router-dom";
 import { postcodes } from "../assets/assets";
 import calculateActPricing from "./utils/pricing";
 import axios from "axios";
-import { backendUrl } from "../App";
-
-// Ensure all API requests hit the backend origin, not the Netlify origin
-const api = (p) => `${backendUrl}/${String(p).replace(/^\/+/, "")}`;
 
 
 const Acts = () => {
@@ -247,7 +243,7 @@ const [availLoading, setAvailLoading] = useState(false);
           continue;
         }
         const res = await fetch(
-          api(`api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`)
+          `/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`
         );
         const data = await res.json();
         const distanceMeters =
@@ -269,7 +265,7 @@ const [availLoading, setAvailLoading] = useState(false);
           continue;
         }
         const res = await fetch(
-          api(`api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`)
+          `/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`
         );
         const data = await res.json();
         const outbound = data?.outbound;
@@ -313,6 +309,9 @@ const [availLoading, setAvailLoading] = useState(false);
     return `${totalPrice}`;
   };
 
+import { backendUrl } from '../App';
+const api = (p) => `${backendUrl.replace(/\/+$/, '')}/${String(p).replace(/^\/+/, '')}`;
+
 useEffect(() => {
   const loadAvail = async () => {
     setAvailLoading(true);
@@ -336,11 +335,10 @@ useEffect(() => {
         }
       } catch {}
 
-      const url = api(`api/availability/acts-by-date?date=${encodeURIComponent(d)}`);
+      const url = `${backendUrl}/api/availability/acts-by-date?date=${encodeURIComponent(d)}`;
 
       const res = await fetch(url);
       const ct = String(res.headers.get("content-type") || "").toLowerCase();
-     
 
       // --- robust parse ---
       let bodyText = "";
@@ -368,36 +366,34 @@ useEffect(() => {
       const available   = Array.isArray(payload.availableActIds)   ? payload.availableActIds   : [];
       const actIds      = Array.isArray(payload.actIds)            ? payload.actIds            : [];
 
-     
-
       // --- Build tri-state map from server payload (you already have this above) ---
-const map = {};
-for (const id of unavailable) map[id] = false;
-for (const id of available)   if (!(id in map)) map[id] = true;
-if (!payload.unavailableActIds && actIds.length) {
-  for (const id of actIds) if (!(id in map)) map[id] = true;
-}
+      const map = {};
+      for (const id of unavailable) map[id] = false;
+      for (const id of available)   if (!(id in map)) map[id] = true;
+      if (!payload.unavailableActIds && actIds.length) {
+        for (const id of actIds) if (!(id in map)) map[id] = true;
+      }
 
-// --- 👇 NEW: merge availability from Act docs as a fallback/source-of-truth ---
-const dateKey = d; // your selected date "YYYY-MM-DD"
-for (const a of approvedActs) {
-  const rows = Array.isArray(a.availabilityByDate) ? a.availabilityByDate : [];
-  // pick latest entry for that day
-  const matches = rows.filter(r => String(r.dateISO || "").slice(0,10) === dateKey);
-  if (matches.length) {
-    matches.sort((x,y) => new Date(x.setAt||0) - new Date(y.setAt||0));
-    const latest = matches[matches.length - 1];
-    const st = (latest?.status || "").toLowerCase(); // "available" | "unavailable"
-    if (st === "unavailable") {
-      map[a._id] = false;              // ❌ hide
-    } else if (st === "available" && map[a._id] !== false) {
-      map[a._id] = true;               // ✅ show (unless already false)
-    }
-  }
-}
+      // --- 👇 NEW: merge availability from Act docs as a fallback/source-of-truth ---
+      const dateKey = d; // your selected date "YYYY-MM-DD"
+      for (const a of approvedActs) {
+        const rows = Array.isArray(a.availabilityByDate) ? a.availabilityByDate : [];
+        // pick latest entry for that day
+        const matches = rows.filter(r => String(r.dateISO || "").slice(0,10) === dateKey);
+        if (matches.length) {
+          matches.sort((x,y) => new Date(x.setAt||0) - new Date(y.setAt||0));
+          const latest = matches[matches.length - 1];
+          const st = (latest?.status || "").toLowerCase(); // "available" | "unavailable"
+          if (st === "unavailable") {
+            map[a._id] = false;              // ❌ hide
+          } else if (st === "available" && map[a._id] !== false) {
+            map[a._id] = true;               // ✅ show (unless already false)
+          }
+        }
+      }
 
-try { sessionStorage.setItem(cacheKey, JSON.stringify(map)); } catch {}
-setAvailableMap(map);
+      try { sessionStorage.setItem(cacheKey, JSON.stringify(map)); } catch {}
+      setAvailableMap(map);
     } catch (e) {
       setAvailableMap({}); // no data ⇒ don’t hide anyone
     } finally {
@@ -2054,545 +2050,4 @@ if (initializing && acts.length === 0) {
                 <input
                   className="w-3"
                   type="checkbox"
-                  value={"speedy_setup"}
-                  onChange={toggleSetupAndSoundcheck}
-                  checked={setupAndSoundcheck.includes("speedy_setup")}
-                />{" "}
-                60min Speedy Setup & Soundcheck
-              </p>
-            </div>
-          )}
-
-          {/* PA and Lights filter */}
-          <p
-            onClick={() => setShowPaAndLightsFilter(!showPaAndLightsFilter)}
-            className="mb-3 mt-3 text-sm font-medium flex items-center cursor-pointer gap-2"
-          >
-            PA & LIGHTS
-            <img
-              className={`h-3 transition-transform duration-300 ${showPaAndLightsFilter ? "rotate-90" : ""}`}
-              src={assets.dropdown_icon}
-              alt=""
-            />
-          </p>
-
-          {/* PA and Lights  dropdown */}
-          {showPaAndLightsFilter && (
-            <div className="flex flex-col gap-2 text-sm font-light w-11/12 text-gray-700">
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"small_pa_size"}
-                  onChange={togglePaAndLights}
-                  checked={paAndLights.includes("small_pa_size")}
-                />{" "}
-                Small PA System
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"medium_pa_size"}
-                  onChange={togglePaAndLights}
-                  checked={paAndLights.includes("medium_pa_size")}
-                />{" "}
-                Medium PA System
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"large_pa_size"}
-                  onChange={togglePaAndLights}
-                  checked={paAndLights.includes("large_pa_size")}
-                />{" "}
-                Large PA System
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"small_light_size"}
-                  onChange={togglePaAndLights}
-                  checked={paAndLights.includes("small_light_size")}
-                />{" "}
-                Small Light System
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"medium_light_size"}
-                  onChange={togglePaAndLights}
-                  checked={paAndLights.includes("medium_light_size")}
-                />{" "}
-                Medium Light System
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"large_light_size"}
-                  onChange={togglePaAndLights}
-                  checked={paAndLights.includes("large_light_size")}
-                />{" "}
-                Large Light System
-              </p>
-            </div>
-          )}
-
-          {/* PLI filter */}
-          <p
-            onClick={() => setShowPliFilter(!showPliFilter)}
-            className="mb-3 mt-3 text-sm font-medium flex items-center cursor-pointer gap-2"
-          >
-            PLI
-            <img
-              className={`h-3 transition-transform duration-300 ${showPliFilter ? "rotate-90" : ""}`}
-              src={assets.dropdown_icon}
-              alt=""
-            />
-          </p>
-
-          {/* pli options dropdown */}
-          {showPliFilter && (
-            <div className="flex flex-col gap-2 text-sm font-light w-11/12 text-gray-700">
-              <label className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={1}
-                  onChange={togglePli}
-                  checked={pli.some((value) => value >= 1)}
-                />{" "}
-                Up to £1m
-              </label>
-              <label className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={2}
-                  onChange={togglePli}
-                  checked={pli.some((value) => value >= 2)}
-                />{" "}
-                Up to £2m
-              </label>
-              <label className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={3}
-                  onChange={togglePli}
-                  checked={pli.some((value) => value >= 3)}
-                />{" "}
-                Up to £3m
-              </label>
-              <label className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={4}
-                  onChange={togglePli}
-                  checked={pli.some((value) => value >= 4)}
-                />{" "}
-                Up to £4m
-              </label>
-              <label className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={5}
-                  onChange={togglePli}
-                  checked={pli.some((value) => value >= 5)}
-                />{" "}
-                Up to £5m
-              </label>
-              <label className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={10}
-                  onChange={togglePli}
-                  checked={pli.some((value) => value >= 10)}
-                />{" "}
-                Up to £10m
-              </label>
-              <label className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={15}
-                  onChange={togglePli}
-                  checked={pli.some((value) => value >= 15)}
-                />{" "}
-                Up to £15m
-              </label>
-              <label className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={20}
-                  onChange={togglePli}
-                  checked={pli.some((value) => value >= 20)}
-                />{" "}
-                Up to £20m
-              </label>
-            </div>
-          )}
-
-          {/*Extra services filter */}
-          <p
-            onClick={() => setShowExtraServicesFilter(!showExtraServicesFilter)}
-            className="mb-3 mt-3 text-sm font-medium flex items-center cursor-pointer gap-2"
-          >
-            EXTRA SERVICES
-            <img
-              className={`h-3 transition-transform duration-300 ${showExtraServicesFilter ? "rotate-90" : ""}`}
-              src={assets.dropdown_icon}
-              alt=""
-            />
-          </p>
-
-          {/*Extra services filter */}
-          {showExtraServicesFilter && (
-            <div className="flex flex-col gap-2 text-sm font-light w-11/12 text-gray-700">
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"ceremony_solo"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("ceremony_solo")}
-                />{" "}
-                Ceremony Solo
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"duo_ceremony"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("duo_ceremony")}
-                />{" "}
-                Ceremony Duo
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"trio_ceremony"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("trio_ceremony")}
-                />{" "}
-                Ceremony Trio
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"four_piece_ceremony"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("four_piece_ceremony")}
-                />{" "}
-                Ceremony 4-piece
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"afternoon_solo"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("afternoon_solo")}
-                />{" "}
-                Afternoon Reception Solo
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"afternoon_duo"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("afternoon_duo")}
-                />{" "}
-                Afternoon Reception Duo
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"afternoon_trio"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("afternoon_trio")}
-                />{" "}
-                Afternoon Reception Trio
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"afternoon_4piece"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("afternoon_4piece")}
-                />{" "}
-                Afternoon Reception 4-piece
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"early_arrival"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("early_arrival")}
-                />{" "}
-                Early Arrival
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"late_stay"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("late_stay")}
-                />{" "}
-                Late Stay
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"extra_song"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("extra_song")}
-                />{" "}
-                Extra Song Requests
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"extra_sets"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("extra_sets")}
-                />{" "}
-                Extra Main Performance Sets
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"add_another_vocalist"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("add_another_vocalist")}
-                />{" "}
-                Add Another Vocalist
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"sound_engineering_for_another_act"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes(
-                    "sound_engineering_for_another_act"
-                  )}
-                />{" "}
-                Sound Engineering for Another Act
-              </p>
-              <p className="flex gap-2">
-                <input
-                  className="w-3"
-                  type="checkbox"
-                  value={"israeli_sets"}
-                  onChange={toggleExtraServices}
-                  checked={extraServices.includes("israeli_sets")}
-                />{" "}
-                Israeli Dancing Sets
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-      {/* Right side */}
-      <div className="flex-1">
-        <div className="flex justify-left text-base justify-between sm:text-2xl mb-4">
-          <Title text1={"ALL"} text2={"ACTS"} />
-
-          {/* Current Address in State */}
-          <div className="flex text-base sm:text-2xl justify-between gap-6">
-            {/* Product/Act Sort */}
-            <select
-              className="border-2 border-gray-300 text-sm px-2"
-              onChange={(e) => setSortType(e.target.value)}
-              value={sortType}
-            >
-              <option value="relevent">Sort by: Relevant</option>
-              <option value="low-high">Sort by: Low to High</option>
-              <option value="high-low">Sort by: High to Low</option>
-            </select>
-          </div>
-        </div>
-        {/* ✅ Now dynamically shows selected date & address */}
-        <div>
-          {selectedDate && selectedAddress ? (
-            <p className="text-sm mt-3 justify-right p-2 text-gray-500">
-              Showing Results for:
-              <span className="text-gray-700">
-                {" "}
-                {formatDate(selectedDate)} at{" "}
-                {storedPlace && `${storedPlace}, `}
-                {selectedAddress}{" "}
-              </span>
-              <span
-                onClick={() => triggerSearch()}
-                className="text-blue-600 cursor-pointer underline ml-2"
-              >
-                edit search
-              </span>
-            </p>
-          ) : (
-            <p className="text-sm mt-3 justify-right p-2 text-gray-500">
-              Please select a date and location for an accurate quote!
-              <span
-                onClick={() => triggerSearch()}
-                className="text-blue-600 cursor-pointer underline ml-2"
-              >
-                Begin Search
-              </span>
-            </p>
-          )}
-        </div>
-        
-        <div>
-          
-          {(genre.length > 0 ||
-            act_size.length > 0 ||
-            djServices.length > 0 ||
-            songSearch.length > 0 ||
-            actSearch.length > 0 ||
-            instruments.length > 0 ||
-            wireless.length > 0 ||
-            soundLimiters.length > 0 ||
-            setupAndSoundcheck.length > 0 ||
-            paAndLights.length > 0 ||
-            pli.length > 0 ||
-            extraServices.length > 0) && (
-            <div className="flex flex-wrap gap-2 p-2 mb-4 border-b">
-              {updatingResults && (
-  <div className="w-full sm:ml-0 mb-2 px-3 py-2 text-sm text-gray-600 bg-gray-100 border border-gray-200 rounded">
-    Updating results…
-  </div>
-)}
-
-              
-              {[
-                ...genre,
-                ...act_size,
-                ...djServices,
-                ...instruments,
-                ...wireless,
-                ...soundLimiters,
-                ...setupAndSoundcheck,
-                ...paAndLights,
-                ...pli,
-                ...extraServices,
-              ].map((item) => (
-                <span
-                  key={item}
-                  className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded flex items-center gap-2"
-                >
-                  {labelMap[item] || item}{" "}
-                  {/* Use labelMap to show a friendly name */}
-                  <button
-                    onClick={() => {
-                      if (genre.includes(item))
-                        toggleGenre({ target: { value: item } });
-                      else if (act_size.includes(item))
-                        toggleActSize({ target: { value: item } });
-                      else if (djServices.includes(item))
-                        toggleDjServices({ target: { value: item } });
-                      else if (instruments.includes(item))
-                        toggleInstruments({ target: { value: item } });
-                      else if (wireless.includes(item))
-                        toggleWireless({ target: { value: item } });
-                      else if (soundLimiters.includes(item))
-                        toggleSoundLimiters({ target: { value: item } });
-                      else if (setupAndSoundcheck.includes(item))
-                        toggleSetupAndSoundcheck({ target: { value: item } });
-                      else if (paAndLights.includes(item))
-                        togglePaAndLights({ target: { value: item } });
-                      else if (pli.includes(item))
-                        togglePli({ target: { value: item } });
-                      else if (extraServices.includes(item))
-                        toggleExtraServices({ target: { value: item } });
-                    }}
-                    className="text-gray-100 text-xs font-bold"
-                  >
-                    ✖️
-                  </button>
-                </span>
-              ))}
-
-              {/* Song or Artist Search */}
-              {songSearch.map((item) => (
-                <span
-                  key={item}
-                  className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded flex items-center gap-2"
-                >
-                  {item} {/* User input appears as a tag */}
-                  <button
-                    onClick={() =>
-                      setSongSearch(songSearch.filter((song) => song !== item))
-                    }
-                    className="text-gray-100 text-xs font-bold"
-                  >
-                    ✖️
-                  </button>
-                </span>
-              ))}
-
-              {/* Act Name Search */}
-              {actSearch.map((item) => (
-                <span
-                  key={item}
-                  className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded flex items-center gap-2"
-                >
-                  {item} {/* User input appears as a tag */}
-                  <button
-                    onClick={() =>
-                      setActSearch(actSearch.filter((act) => act !== item))
-                    }
-                    className="text-gray-100 text-xs font-bold"
-                  >
-                    ✖️
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-        {/* Map products / acts */}
-        
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 gap-y-6">
-        {selectedDate && availLoading ? (
-          <div className="col-span-2 md:col-span-3 lg:col-span-4 p-6 text-center text-gray-600">
-            Checking availability…
-          </div>
-        ) : (
-          filterProducts.map((item, index) => (
-           <ActItem
-  key={item._id}
-  actData={item}
-  isShortlisted={isShortlisted(item._id)}
-  onShortlistToggle={() => shortlistAct(userId, item._id)}
-  price={item.formattedPrice}
-/>
-          ))
-        )}
-      </div>
-      </div>
-    </div>
-  );
-};
-
-export default Acts;
+         <truncated__content/>
