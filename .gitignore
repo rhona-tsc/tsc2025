@@ -13,3 +13,6 @@ credentials.json
 node_modules/
 dist/
 build/
+
+# Local Netlify folder
+.netlify
