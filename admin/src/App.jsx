@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Navbar from "./components/Navbar";
 import Sidebar from "./components/Sidebar";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import Add from "./pages/Add";
 import List from "./pages/List";
 import MusicianDashboard from "./pages/MusicianDashboard";
@@ -143,6 +143,19 @@ const App = () => {
               />
               <div className="w-[70%] mx-auto ml-[max(5vw,25px)] my-8 text-gray-600 text-base">
                 <Routes>
+                  <Route
+                    path="/"
+                    element={
+                      <Navigate
+                        to={
+                          (userRole === "agent" || email === "hello@thesupremecollective.co.uk")
+                            ? "/moderate"
+                            : "/musicians-dashboard"
+                        }
+                        replace
+                      />
+                    }
+                  />
                   <Route
                     path="/musicians-dashboard"
                     element={
@@ -289,6 +302,7 @@ const App = () => {
                   )}
 
                   <Route path="/trash" element={<TrashedActs token={token} />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </div>
             </div>

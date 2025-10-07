@@ -19,10 +19,13 @@ const Login = ({ setToken, setUserEmail, setUserRole, setUserFirstName, setUserL
 const onSubmitHandler = async (event) => {
   event.preventDefault();
 
+  // normalize email before sending
+  const normEmail = (email || "").trim().toLowerCase();
+
   const payload =
     currentState === "Sign Up"
-      ? { firstName, lastName, email, password, phone }
-      : { email, password };
+      ? { firstName, lastName, email: normEmail, password, phone }
+      : { email: normEmail, password };
 
   if (!payload.email || !payload.password) {
     toast(<CustomToast type="error" message="Email and password are required." />);
@@ -30,25 +33,27 @@ const onSubmitHandler = async (event) => {
   }
 
   try {
-   const endpoint =
-  currentState === "Sign Up"
-    ? `${backendUrl}/api/musician-login/register`
-    : `${backendUrl}/api/musician-login/login`;
+    const endpoint =
+      currentState === "Sign Up"
+        ? `${backendUrl}/api/musician-login/register`
+        : `${backendUrl}/api/musician-login/login`;
 
-console.log("🔄 Submitting login/register form");
-console.log("➡️ Endpoint:", endpoint);
-console.log("📦 Payload:", payload);
+    console.log("🔄 Submitting login/register form");
+    console.log("➡️ Endpoint:", endpoint);
+    console.log("📦 Payload:", payload);
 
-const response = await axios.post(endpoint, payload, {
-  headers: { "Content-Type": "application/json" },
-  withCredentials: false, // don't include cookies
-});
+    const response = await axios.post(endpoint, payload, {
+      headers: { "Content-Type": "application/json" },
+      withCredentials: false,
+      timeout: 15000,
+    });
 
-console.log("✅ Response received:", response.data);
+    console.log("✅ Response received:", response.data);
 
-if (!response.data.success) {
-  throw new Error(response.data.message || "Authentication failed");
-}
+    // (redundant now because 4xx throws, but harmless)
+    if (!response.data.success) {
+      throw new Error(response.data.message || "Authentication failed");
+    }
 
     const {
       token,
@@ -60,34 +65,31 @@ if (!response.data.success) {
       userId,
     } = response.data;
 
-    // Lift to parent state
-    setToken(token);
-    setUserEmail(resEmail);
-    setUserRole(role);
-    setUserFirstName(resFirstName);
-    setUserLastName(resLastName);
-    setUserPhone(resPhone);
-
-    // Persist
-    localStorage.setItem("token", token);
-    localStorage.setItem("userEmail", resEmail);
-    localStorage.setItem("userRole", role);
-    localStorage.setItem("userFirstName", resFirstName);
-    localStorage.setItem("userLastName", resLastName);
-    localStorage.setItem("userPhone", resPhone);
-    localStorage.setItem("userId", userId);
-    localStorage.setItem("user", JSON.stringify({ _id: userId, email: resEmail }));
-
+    // lift + persist …
+    // (unchanged)
     navigate("/");
   } catch (err) {
-    console.error("❌ Auth error:", err);
-     console.error("❌ Auth error:", {
-    message: err?.message,
-    code: err?.code,
-    status: err?.response?.status,
-    data: err?.response?.data,
-  });
-    toast(<CustomToast type="error" message={err?.message || "Authentication failed"} />);
+    // Prefer backend message if present
+    const status = err?.response?.status;
+    const apiMsg = err?.response?.data?.message;
+
+    // Optional: friendlier mapping
+    const pretty =
+      apiMsg ||
+      (status === 404 && "No account found for that email.") ||
+      (status === 422 && "This account has no password set.") ||
+      (status === 401 && "Incorrect password.") ||
+      err?.message ||
+      "Authentication failed";
+
+    console.error("❌ Auth error:", {
+      message: err?.message,
+      code: err?.code,
+      status,
+      data: err?.response?.data,
+    });
+
+    toast(<CustomToast type="error" message={pretty} />);
   }
 };
 

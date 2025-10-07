@@ -34,12 +34,14 @@ const List = ({ token }) => {
     [token]
   );
 
-  const buildHeaders = () => ({
-  headers: {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(token ? { token } : {}),
-  },
-  withCredentials: true,
+    const buildHeaders = () => ({
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token ? { token } : {}),
+    },
+    // We do NOT use cookies for auth; sending credentials triggers strict CORS requirements.
+    // Leave credentials off so the browser doesn't require Access-Control-Allow-Credentials.
+    withCredentials: false,
 });
 
 const fetchList = async () => {
