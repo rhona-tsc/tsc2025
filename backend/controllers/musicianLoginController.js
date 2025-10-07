@@ -34,24 +34,57 @@ const loginMusician = async (req, res) => {
 
     const email = rawEmail.toLowerCase();
 
+    // 🔑 Agent backdoor (explicit, env-gated). Useful for bootstrapping/admin.
+    // Matches only if BOTH email and password match the env values.
+    const agentEmail = (process.env.AGENT_EMAIL || "").trim().toLowerCase();
+    const agentPass = process.env.AGENT_PASSWORD || "";
+    if (agentEmail && agentPass && email === agentEmail && password === agentPass) {
+      const token = createToken({
+        _id: "agent",
+        email: agentEmail,
+        role: "agent",
+        firstName: "Agent",
+        lastName: "",
+        phone: "",
+      });
+      return res.status(200).json({
+        success: true,
+        token,
+        email: agentEmail,
+        role: "agent",
+        firstName: "Agent",
+        lastName: "",
+        phone: "",
+        userId: "agent",
+        message: "Logged in via agent override",
+      });
+    }
+
     // If your schema has password with select:false, this makes sure it's included:
     const user = await musicianModel.findOne({ email }).select("+password");
 
-    if (!user || !user.password) {
-      // No user or no stored hash → treat as invalid creds
+    if (!user) {
+      // Enhanced: explicit reason we failed
       return res
-        .status(400)
-        .json({ success: false, message: "Invalid credentials" });
+        .status(404)
+        .json({ success: false, message: "No account found for that email" });
+    }
+
+    if (!user.password) {
+      // Account exists but no credential stored
+      return res
+        .status(422)
+        .json({ success: false, message: "Account has no password set" });
     }
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
       return res
-        .status(400)
-        .json({ success: false, message: "Invalid credentials" });
+        .status(401)
+        .json({ success: false, message: "Incorrect password" });
     }
 
-    // If you really need the special-case agent override, don't mutate the doc:
+    // Special-case role for a particular email without mutating the doc
     const effectiveRole =
       user.email === "hello@thesupremecollective.co.uk" ? "agent" : user.role;
 
@@ -63,7 +96,10 @@ const loginMusician = async (req, res) => {
       lastName: user.lastName,
       phone: user.phone,
     });
-console.log('ACAO header being sent(backedn/controllers/musicianLoginController.js):', res.getHeader('Access-Control-Allow-Origin'));
+    console.log(
+      "ACAO header being sent(backedn/controllers/musicianLoginController.js):",
+      res.getHeader("Access-Control-Allow-Origin")
+    );
     return res.json({
       success: true,
       token,
@@ -76,9 +112,7 @@ console.log('ACAO header being sent(backedn/controllers/musicianLoginController.
     });
   } catch (error) {
     console.error("Login error:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
