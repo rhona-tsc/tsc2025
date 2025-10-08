@@ -2,7 +2,7 @@
 // Single, hardened helper used by the store + admin to fetch travel data
 // Forces an ABSOLUTE backend base so calls never hit the Netlify origin.
 
-export async function getTravelV2(origin, destination, dateISO) {
+export default async function getTravelV2(origin, destination, dateISO) {
   // Pick a backend base in this priority:
   // 1) VITE_BACKEND_URL injected at build
   // 2) window.__BACKEND_URL__ set in index.html at runtime (optional)
