@@ -3,6 +3,8 @@
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
+
+
 import connectDB from './config/mongodb.js';
 import connectCloudinary from './config/connectCloudinary.js';
 import cloudinary from './config/cloudinary.js';
@@ -47,6 +49,14 @@ import { getAvailableActIds } from './controllers/actAvailabilityController.js';
 import mongoose from "mongoose";
 import musicianModel from "./models/musicianModel.js";
 import { submitActSubmission } from './controllers/actSubmissionController.js';
+
+
+// at the top of backend/server.js (after dotenv)
+console.log('ENV CHECK:', {
+  INTERNAL_BASE_URL: process.env.INTERNAL_BASE_URL,
+  BACKEND_PUBLIC_URL: process.env.BACKEND_PUBLIC_URL,
+  BACKEND_URL: process.env.BACKEND_URL,
+});
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -97,6 +107,15 @@ app.use((req, res, next) => {
     _end.apply(this, args);
   };
   next();
+});
+
+app.get('/debug/base', (_req, res) => {
+  res.json({
+    INTERNAL_BASE_URL: process.env.INTERNAL_BASE_URL || null,
+    BACKEND_PUBLIC_URL: process.env.BACKEND_PUBLIC_URL || null,
+    BACKEND_URL: process.env.BACKEND_URL || null,
+    time: new Date().toISOString(),
+  });
 });
 
 /* -------------------------------------------------------------------------- */
