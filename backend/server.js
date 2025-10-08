@@ -17,7 +17,7 @@ import invoiceRoutes from "./routes/invoiceRoutes.js";
 import userRouter from './routes/userRoute.js';
 import musicianRouter from './routes/musicianRoute.js';
 import actV2Routes from './routes/actV2Routes.js';
-import travelRouter from './routes/travel.js';
+import { getTravelData } from './controllers/travelController.js';
 import cartRouter from './routes/cartRoute.js';
 import shortlistRoutes from './routes/shortlist.js';
 import bookingRoutes from './routes/bookingRoutes.js';
@@ -50,7 +50,6 @@ import mongoose from "mongoose";
 import musicianModel from "./models/musicianModel.js";
 import { submitActSubmission } from './controllers/actSubmissionController.js';
 import v2Routes from "./routes/v2.js";
-import getTravelV2 from '../frontend/src/pages/utils/travelV2.js';
 
 // at the top of backend/server.js (after dotenv)
 console.log('ENV CHECK:', {
@@ -214,7 +213,8 @@ app.use('/api/acts', userRouter);
 app.use('/api/musician', musicianRouter);
 app.use('/api/musician/act-v2', actV2Routes);
 
-app.use('/api/travel-data', v2Routes);
+// Public travel data endpoint (no internal fetches)
+app.get('/api/travel/travel-data', getTravelData);
 app.use('/api/cart', cartRouter);
 app.use('/api/shortlist', shortlistRoutes);
 app.use('/api/booking', bookingRoutes);

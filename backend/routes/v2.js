@@ -1,6 +1,7 @@
 // backend/routes/v2.js
 import express from "express";
 import { getAvailableActIds } from "../controllers/actAvailabilityController.js";
+import { getTravelData } from "../controllers/travelController.js";
 
 const router = express.Router();
 
@@ -50,55 +51,18 @@ router.get("/availability/check", async (req, res) => {
 });
 
 /**
- * GET /api/v2/travel?origin=SL6+8HN&destination=SW1A+1AA&date=YYYY-MM-DD
- * Thin wrapper that calls your existing travel handler, then normalizes.
+ * GET /api/travel/travel-data?origin=...&destination=...&date=YYYY-MM-DD
+ * Delegates directly to the travel controller to avoid any internal fetches,
+ * so it works the same locally, on Render, and on Netlify.
  */
-router.get("/travel-data", async (req, res) => {
+router.get("/travel/travel-data", async (req, res) => {
   try {
-    const origin = String(req.query?.origin || "").trim();
-    const destination = String(req.query?.destination || "").trim();
-    const date = (String(req.query?.date || "").slice(0,10)) || new Date().toISOString().slice(0,10);
-    if (!origin || !destination) {
-      return res.status(400).json({ success:false, message:"origin and destination required" });
-    }
-
-    const base =
-      process.env.INTERNAL_BASE_URL ||
-      process.env.BACKEND_PUBLIC_URL ||
-      process.env.BACKEND_URL ||
-      `http://localhost:${process.env.PORT || 4000}`;
-
-    // ✅ call the new internal travel core endpoint
-    const u = new URL("/api/v2/travel-core", base.replace(/\/+$/, ""));
-    u.searchParams.set("origin", origin);
-    u.searchParams.set("destination", destination);
-    u.searchParams.set("date", date);
-
-    const r = await fetch(u.toString(), { headers: { accept: "application/json" } });
-    if (!r.ok) {
-      console.warn(`⚠️ /v2/travel internal fetch ${r.status} — falling back`);
-      return res.status(r.status).json({ success: false, message: `travel ${r.status}` });
-    }
-
-    const data = await r.json();
-    const firstEl = data?.rows?.[0]?.elements?.[0];
-    const outbound =
-      data?.outbound ||
-      (firstEl?.distance && firstEl?.duration
-        ? { distance: firstEl.distance, duration: firstEl.duration, fare: firstEl.fare }
-        : null);
-    const returnTrip = data?.returnTrip || null;
-
-    return res.json({
-      success: true,
-      date,
-      outbound,
-      returnTrip,
-      sources: data?.sources || {},
-    });
+    // Controller already validates params and returns normalized shape:
+    // { success, date, outbound, returnTrip, sources }
+    return await getTravelData(req, res);
   } catch (err) {
-    console.error("v2 travel error:", err?.message || err);
-    return res.status(500).json({ success:false, message:"Server error" });
+    console.error("v2 travel-data error:", err?.message || err);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
