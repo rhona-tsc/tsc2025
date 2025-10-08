@@ -25,7 +25,7 @@ export default async function getTravelV2(origin, destination, dateISO) {
     `&destination=${encodeURIComponent(destination || "")}` +
     `&date=${encodeURIComponent((dateISO || "").slice(0, 10))}`;
 
-  const url = `${BASE}/api/travel/travel-data?${qs}`;
+  const url = `${BASE}/api/v2/travel/travel-data?${qs}`;
 
   const res = await fetch(url, { headers: { accept: "application/json" } });
   const text = await res.text();

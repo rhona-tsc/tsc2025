@@ -17,7 +17,7 @@ import invoiceRoutes from "./routes/invoiceRoutes.js";
 import userRouter from './routes/userRoute.js';
 import musicianRouter from './routes/musicianRoute.js';
 import actV2Routes from './routes/actV2Routes.js';
-import { getTravelData } from './controllers/travelController.js';
+import travelRoutes from './routes/v2.js';
 import cartRouter from './routes/cartRoute.js';
 import shortlistRoutes from './routes/shortlist.js';
 import bookingRoutes from './routes/bookingRoutes.js';
@@ -213,8 +213,6 @@ app.use('/api/acts', userRouter);
 app.use('/api/musician', musicianRouter);
 app.use('/api/musician/act-v2', actV2Routes);
 
-// Public travel data endpoint (no internal fetches)
-app.get('/api/travel/travel-data', getTravelData);
 app.use('/api/cart', cartRouter);
 app.use('/api/shortlist', shortlistRoutes);
 app.use('/api/booking', bookingRoutes);
