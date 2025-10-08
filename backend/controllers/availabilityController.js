@@ -799,7 +799,7 @@ const fetchTravel = async (origin, destination, dateISO) => {
     "http://localhost:4000"
   ).replace(/\/+$/, "");
 
-  const url = `${BASE}/api/travel/get-travel-data` +
+  const url = `${BASE}/api/v2/travel` +
     `?origin=${encodeURIComponent(origin)}` +
     `&destination=${encodeURIComponent(destination)}` +
     `&date=${encodeURIComponent(dateISO)}`;

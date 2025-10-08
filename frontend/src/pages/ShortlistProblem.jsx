@@ -140,8 +140,33 @@ const calculateActPricing = async (
   console.log("📆 Date:", selectedDate);
   console.log("👥 Lineup:", selectedLineup);
 
-  // ✅ always call your backend (works on Netlify/Render)
-  const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
+  // ✅ Always call your backend (Render/Netlify) not the site origin
+  const BASE = (import.meta.env.VITE_BACKEND_URL || "https://tsc2025.onrender.com").replace(/\/+$/, "");
+
+  // Helper: fetch travel JSON (new + legacy shapes)
+  const fetchTravel = async (origin, destination, dateISO) => {
+    const url = `${BASE}/api/v2/travel-core` +
+      `?origin=${encodeURIComponent(origin)}` +
+      `&destination=${encodeURIComponent(destination)}` +
+      `&date=${encodeURIComponent(dateISO)}`;
+
+    const res = await fetch(url, { headers: { accept: "application/json" } });
+    const text = await res.text();
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; } catch {}
+    if (!res.ok) throw new Error(`travel http ${res.status}`);
+
+    // Normalize: prefer new shape, fallback to legacy rows/elements
+    const firstEl = data?.rows?.[0]?.elements?.[0];
+    const outbound = data?.outbound || (
+      firstEl?.distance && firstEl?.duration
+        ? { distance: firstEl.distance, duration: firstEl.duration, fare: firstEl.fare }
+        : undefined
+    );
+    const returnTrip = data?.returnTrip;
+
+    return { outbound, returnTrip, raw: data };
+  };
 
   let travelFee = 0;
 
@@ -156,12 +181,8 @@ const calculateActPricing = async (
       return min;
     }, null);
   }
-  if (!smallestLineup) {
-    console.warn(`⚠️ No valid lineup found for ${act.name}`);
-    return null;
-  }
-  if (!Array.isArray(smallestLineup.bandMembers)) {
-    console.warn(`⚠️ Lineup found but bandMembers is not an array:`, smallestLineup);
+  if (!smallestLineup || !Array.isArray(smallestLineup.bandMembers)) {
+    console.warn(`⚠️ No valid lineup found for ${act?.name}`);
     return null;
   }
 
@@ -181,7 +202,7 @@ const calculateActPricing = async (
     "renfrewshire","scottish borders","shetland islands","south ayrshire","south lanarkshire",
     "stirling","west dunbartonshire","west lothian"
   ]);
-  const isNorthernGig = northernCounties.has((selectedCounty || "").toLowerCase().trim());
+  const isNorthernGig = northernCounties.has(String(selectedCounty || "").toLowerCase().trim());
 
   const bandMembers = act.useDifferentTeamForNorthernGigs && isNorthernGig
     ? (act.northernTeam || [])
@@ -201,14 +222,13 @@ const calculateActPricing = async (
   // ---- travel calc ----
   const memberPostcodes = bandMembers.map(m => m.postCode).filter(Boolean);
   console.log("📍 Member Postcodes:", memberPostcodes);
-  console.log(`🧱 All lineups for ${act.name}:`, act.lineups);
 
   if (act.useCountyTravelFee && act.countyFees) {
-    const countyKey = (selectedCounty || "").toLowerCase();
-    const feePerMember = act.countyFees[countyKey] || 0;
+    const countyKey = String(selectedCounty || "").toLowerCase();
+    const feePerMember = Number(act.countyFees[countyKey]) || 0;
     travelFee = feePerMember * memberPostcodes.length;
   } else if (Number(act.costPerMile) > 0) {
-    // cost-per-mile → only need outbound distance
+    // cost-per-mile → need outbound only
     for (const postCode of memberPostcodes) {
       const destination = typeof selectedAddress === "string"
         ? selectedAddress
@@ -217,21 +237,14 @@ const calculateActPricing = async (
         console.warn(`⚠️ No destination address found for cost-per-mile calc`);
         continue;
       }
-
       try {
-        const url = `${base}/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`;
-        console.log("🚚 Fetching travel data:", { url });
-        const res = await fetch(url, { headers: { accept: "application/json" } });
-        const data = await res.json();
-
-        // tolerate both shapes from backend
-        const distanceMeters =
-          data?.outbound?.distance?.value ??
-          data?.rows?.[0]?.elements?.[0]?.distance?.value ??
+        const { outbound, raw } = await fetchTravel(postCode, destination, selectedDate);
+        const meters =
+          outbound?.distance?.value ??
+          raw?.rows?.[0]?.elements?.[0]?.distance?.value ??
           0;
-
-        const distanceMiles = distanceMeters / 1609.34;
-        travelFee += (distanceMiles || 0) * Number(act.costPerMile) * 25;
+        const miles = meters / 1609.34;
+        travelFee += (miles || 0) * Number(act.costPerMile) * 25; // your round-trip multiplier
       } catch (e) {
         console.warn("⚠️ travel fetch failed:", e?.message || e);
       }
@@ -251,13 +264,7 @@ const calculateActPricing = async (
       }
 
       try {
-        const url = `${base}/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`;
-        console.log("🚚 Fetching travel data:", { url });
-        const res = await fetch(url, { headers: { accept: "application/json" } });
-        const data = await res.json();
-
-        const outbound = data?.outbound;
-        const returnTrip = data?.returnTrip;
+        const { outbound, returnTrip } = await fetchTravel(postCode, destination, selectedDate);
         if (!outbound || !returnTrip) {
           console.warn("⚠️ missing outbound/returnTrip for MU-rate calc");
           continue;

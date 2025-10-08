@@ -50,6 +50,7 @@ const getCountyFeeFromMap = (feesMap, countyName) => {
 };
 
 // Fetch your existing travel service (the one FE calls)
+// Prefer internal base for server-to-server calls, then fall back to public
 async function getTravelData(originPostcode, destination, dateISO) {
   const qs = new URLSearchParams({
     origin: originPostcode,
@@ -57,19 +58,19 @@ async function getTravelData(originPostcode, destination, dateISO) {
     date: dateISO,
   }).toString();
 
-  // Unified backend base URL with sensible fallbacks
   const BASE = (
+    process.env.INTERNAL_BASE_URL ||   // e.g. http://localhost:4000 or internal service URL
     process.env.BACKEND_PUBLIC_URL ||
     process.env.BACKEND_URL ||
-    process.env.INTERNAL_BASE_URL ||
     "https://tsc2025.onrender.com"
   ).replace(/\/+$/, "");
 
-  const url = `${BASE}/api/travel/get-travel-data?${qs}`;
+  // ✅ use the v2 route
+  const url = `${BASE}/api/v2/travel?${qs}`;
 
   const res = await fetch(url, { headers: { accept: "application/json" } });
-
   const text = await res.text();
+
   let data = {};
   try { data = text ? JSON.parse(text) : {}; } catch {}
 
@@ -78,7 +79,17 @@ async function getTravelData(originPostcode, destination, dateISO) {
     throw new Error(`travel ${res.status} - ${msg}`);
   }
 
-  return data; // supports both { outbound, returnTrip } and legacy { rows:[{elements:[...]}] }
+  // --- Normalize shapes so callers can always use `.outbound` ---
+  const firstEl = data?.rows?.[0]?.elements?.[0]; // legacy shape
+  const outbound =
+    data?.outbound ||
+    (firstEl?.distance && firstEl?.duration
+      ? { distance: firstEl.distance, duration: firstEl.duration, fare: firstEl.fare }
+      : undefined);
+
+  const returnTrip = data?.returnTrip;
+
+  return { outbound, returnTrip, raw: data };
 }
 
 /**

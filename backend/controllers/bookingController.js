@@ -280,7 +280,7 @@ async function computeMemberFeeDetailed({ member, lineup, booking, act }, dbgTag
           "https://tsc2025.onrender.com"
         ).replace(/\/+$/, "");
 
-        const res = await fetch(`${BASE}/api/travel/get-travel-data?${qs.toString()}`, {
+        const res = await fetch(`${BASE}/api/v2/travel?${qs.toString()}`, {
           headers: { accept: "application/json" },
         });
 

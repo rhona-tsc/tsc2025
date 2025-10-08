@@ -109,31 +109,70 @@ const [availLoading, setAvailLoading] = useState(false);
     selectedDate,
     selectedLineup
   ) => {
-   
-    let travelFee = 0; 
+    // Canonical backend base (never the Netlify origin)
+    const BASE = (
+      import.meta.env.VITE_BACKEND_URL || "https://tsc2025.onrender.com"
+    ).replace(/\/+$/, "");
 
+    // Helper: fetch travel JSON safely; supports new + legacy shapes
+    const fetchTravel = async (origin, destination, dateISO) => {
+      const url =
+        `${BASE}/api/v2/travel-core` +
+        `?origin=${encodeURIComponent(origin)}` +
+        `&destination=${encodeURIComponent(destination)}` +
+        `&date=${encodeURIComponent(String(dateISO).slice(0, 10))}`;
+
+      const res = await fetch(url, { headers: { accept: "application/json" } });
+      const text = await res.text();
+
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = {};
+      }
+      if (!res.ok) throw new Error(`travel http ${res.status}`);
+
+      // --- Normalize shapes ---
+      // Legacy: { rows:[{ elements:[{ distance, duration, fare? }] }] }
+      const legacyEl = data?.rows?.[0]?.elements?.[0];
+
+      // Prefer new shape if present; otherwise build outbound from legacy element
+      const outbound =
+        data?.outbound ||
+        (legacyEl?.distance && legacyEl?.duration
+          ? {
+              distance: legacyEl.distance,
+              duration: legacyEl.duration,
+              fare: legacyEl.fare,
+            }
+          : undefined);
+
+      // returnTrip only exists in the new shape
+      const returnTrip = data?.returnTrip;
+
+      return { outbound, returnTrip, raw: data };
+    };
+
+    let travelFee = 0;
+
+    // ---- choose lineup (smallest or provided) ----
     let smallestLineup = null;
-
     if (selectedLineup && Array.isArray(selectedLineup.bandMembers)) {
       smallestLineup = selectedLineup;
     } else {
       smallestLineup = act.lineups?.reduce((min, lineup) => {
         if (!Array.isArray(lineup.bandMembers)) return min;
-        if (!min || lineup.bandMembers.length < min.bandMembers.length)
-          return lineup;
+        if (!min || lineup.bandMembers.length < min.bandMembers.length) return lineup;
         return min;
       }, null);
     }
 
-    if (!smallestLineup) {
+    if (!smallestLineup || !Array.isArray(smallestLineup.bandMembers)) {
       return null;
     }
 
-    if (!Array.isArray(smallestLineup.bandMembers)) {
-     
-      return null;
-    }
-
+    // ---- northern logic (for team swap) ----
     const northernCounties = new Set([
       "ceredigion",
       "cheshire",
@@ -210,7 +249,7 @@ const [availLoading, setAvailLoading] = useState(false);
     ]);
 
     const isNorthernGig = northernCounties.has(
-      selectedCounty?.toLowerCase().trim()
+      String(selectedCounty || "").toLowerCase().trim()
     );
 
     const bandMembers =
@@ -218,7 +257,7 @@ const [availLoading, setAvailLoading] = useState(false);
         ? act.northernTeam || []
         : smallestLineup.bandMembers || [];
 
-
+    // ---- essential fees (net) ----
     const essentialFees = smallestLineup.bandMembers.flatMap((member) => {
       const baseFee = member.isEssential ? Number(member.fee) || 0 : 0;
       const additionalEssentialFees = (member.additionalRoles || [])
@@ -227,86 +266,92 @@ const [availLoading, setAvailLoading] = useState(false);
       return [baseFee, ...additionalEssentialFees];
     });
 
-    const fee = essentialFees.reduce((sum, fee) => sum + fee, 0);
+    const fee = essentialFees.reduce((sum, n) => sum + n, 0);
 
-    const memberPostcodes = bandMembers
-      .map((member) => member.postCode)
+    // ---- travel fee paths ----
+    const memberPostcodes = (bandMembers || [])
+      .map((m) => m?.postCode)
       .filter(Boolean);
+
+    // 1) County table
     if (act.useCountyTravelFee && act.countyFees) {
-      const countyKey = selectedCounty.toLowerCase();
-      const feePerMember = act.countyFees[countyKey] || 0;
+      const countyKey = String(selectedCounty || "").toLowerCase();
+      const feePerMember = Number(act.countyFees[countyKey]) || 0;
       travelFee = feePerMember * memberPostcodes.length;
-    } else if (act.costPerMile > 0) {
+    }
+    // 2) Per-mile
+    else if (Number(act.costPerMile) > 0) {
       for (const postCode of memberPostcodes) {
         const destination =
           typeof selectedAddress === "string"
             ? selectedAddress
             : selectedAddress?.postcode || selectedAddress?.address || "";
+        if (!destination) continue;
 
-        if (!destination) {
-         
-          continue;
+        try {
+          const { outbound, raw } = await fetchTravel(
+            postCode,
+            destination,
+            selectedDate
+          );
+          const meters =
+            outbound?.distance?.value ??
+            raw?.rows?.[0]?.elements?.[0]?.distance?.value ??
+            0;
+          const miles = meters / 1609.34;
+          travelFee += miles * Number(act.costPerMile) * 25; // your round-trip multiplier
+        } catch (e) {
+          console.warn("⚠️ travel fetch failed (per-mile):", e?.message || e);
         }
-        const res = await fetch(
-          api(`api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`)
-        );
-        const data = await res.json();
-        const distanceMeters =
-          data?.rows?.[0]?.elements?.[0]?.distance?.value || 0;
-        const distanceMiles = distanceMeters / 1609.34;
-        travelFee += distanceMiles * act.costPerMile * 25;
       }
-    } else {
+    }
+    // 3) MU-style (fuel/time/late/tolls) using outbound+returnTrip
+    else {
       for (const member of smallestLineup.bandMembers) {
-        const postCode = member.postCode;
-        if (!postCode) continue;
+        const postCode = member?.postCode;
         const destination =
           typeof selectedAddress === "string"
             ? selectedAddress
             : selectedAddress?.postcode || selectedAddress?.address || "";
+        if (!postCode || !destination) continue;
 
-        if (!destination) {
-        
-          continue;
+        try {
+          const { outbound, returnTrip } = await fetchTravel(
+            postCode,
+            destination,
+            selectedDate
+          );
+          if (!outbound || !returnTrip) continue;
+
+          const outboundDistance = outbound?.distance?.value;
+          const returnDistance = returnTrip?.distance?.value;
+          const outboundDuration = outbound?.duration?.value;
+          const returnDuration = returnTrip?.duration?.value;
+
+          if (
+            typeof outboundDistance !== "number" ||
+            typeof returnDistance !== "number" ||
+            typeof outboundDuration !== "number" ||
+            typeof returnDuration !== "number"
+          ) {
+            continue;
+          }
+
+          const totalDistanceMiles =
+            (outboundDistance + returnDistance) / 1609.34;
+          const totalDurationHours =
+            (outboundDuration + returnDuration) / 3600;
+
+          const fuelFee = totalDistanceMiles * 0.56;
+          const timeFee = totalDurationHours * 13.23;
+          const lateFee = returnDuration / 3600 > 1 ? 136 : 0;
+          const tollFee =
+            (outbound.fare?.value || 0) + (returnTrip.fare?.value || 0);
+
+          travelFee += fuelFee + timeFee + lateFee + tollFee;
+        } catch (e) {
+          console.warn("⚠️ travel fetch failed (MU):", e?.message || e);
         }
-        const res = await fetch(
-          api(`api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`)
-        );
-        const data = await res.json();
-        const outbound = data?.outbound;
-        const returnTrip = data?.returnTrip;
-
-        if (!outbound || !returnTrip) {
-        
-          continue;
-        }
-
-        const outboundDistance = outbound?.distance?.value;
-        const returnDistance = returnTrip?.distance?.value;
-        const outboundDuration = outbound?.duration?.value;
-        const returnDuration = returnTrip?.duration?.value;
-
-        if (
-          typeof outboundDistance !== "number" ||
-          typeof returnDistance !== "number" ||
-          typeof outboundDuration !== "number" ||
-          typeof returnDuration !== "number"
-        ) {
-        
-          continue;
-        }
-
-        const totalDistanceMiles =
-          (outboundDistance + returnDistance) / 1609.34;
-        const totalDurationHours = (outboundDuration + returnDuration) / 3600;
-
-        const fuelFee = totalDistanceMiles * 0.56;
-        const timeFee = totalDurationHours * 13.23;
-        const lateFee = returnDuration / 3600 > 1 ? 136 : 0;
-        const tollFee =
-          (outbound.fare?.value || 0) + (returnTrip.fare?.value || 0);
-
-        travelFee += fuelFee + timeFee + lateFee + tollFee;
       }
     }
 

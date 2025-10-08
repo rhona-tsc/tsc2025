@@ -140,7 +140,7 @@ const loadAvailabilityForDate = async (dateISO) => {
   setAvailLoading(true);
   try {
     const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
-    const url = `${base}/api/availability/acts-by-date?date=${encodeURIComponent(d)}`;
+    const url = `${base}/api/v2/availability/acts?date=${encodeURIComponent(d)}`;
     const r = await fetch(url, { headers: { accept: "application/json" } });
     const j = await r.json();
 
@@ -467,7 +467,7 @@ const isActAvailableForSelectedDate = (actId) =>
     // helper to fetch travel JSON safely and handle HTML errors
     const fetchTravel = async (origin, destination, dateISO) => {
       const url = api(
-        `api/travel/get-travel-data?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(
+        `api/v2/travel?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(
           destination
         )}&date=${encodeURIComponent(dateISO)}`
       );

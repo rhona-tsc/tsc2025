@@ -49,7 +49,7 @@ import { getAvailableActIds } from './controllers/actAvailabilityController.js';
 import mongoose from "mongoose";
 import musicianModel from "./models/musicianModel.js";
 import { submitActSubmission } from './controllers/actSubmissionController.js';
-
+import v2Routes from "./routes/v2.js";
 
 // at the top of backend/server.js (after dotenv)
 console.log('ENV CHECK:', {
@@ -171,6 +171,7 @@ app.post(
     res.sendStatus(200);
   }
 );
+app.use("/api/v2", v2Routes);
 
 // Twilio generic status (kept for backwards compat)
 app.post("/api/shortlist/twilio/status", async (req, res) => {
@@ -262,9 +263,6 @@ app.get("/api/availability/acts-available", async (req, res) => {
 
 // Alias for legacy/alternate client
 app.get("/api/availability/acts-by-date", async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, token, X-Requested-With");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   const date = String(req.query?.date || "").slice(0, 10);
   console.log("🗓️  GET /api/availability/acts-by-date (alias to acts-available)", { date });
   try {

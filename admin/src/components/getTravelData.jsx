@@ -1,33 +1,43 @@
+// admin/src/components/getTravelData.jsx
+
 // Simple in-memory cache to avoid repeated server calls while browsing in admin
 const travelCache = {};
 import axios from 'axios';
 
-// Admin helper: always call backend cache-first endpoint
+// Admin helper: always call NEW backend v2 travel endpoint (cache-first on server)
 export const getTravelData = async (origin, destination, date) => {
-  const cacheKey = `${String(origin).toUpperCase()}-${String(destination).toUpperCase()}`;
+  const today = (date || new Date().toISOString().split('T')[0]).slice(0, 10);
+
+  // Include date in cache key so different days don't collide
+  const cacheKey = `${String(origin).toUpperCase()}-${String(destination).toUpperCase()}-${today}`;
   if (travelCache[cacheKey]) {
-    console.log('📦 (memory) Returning cached travel data for', origin, '→', destination);
+    console.log('📦 (memory) Returning cached travel data for', origin, '→', destination, 'on', today);
     return travelCache[cacheKey];
   }
 
   try {
-    const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
-    const url = `${base}/api/travel/get-travel-data`;
-    const today = date || new Date().toISOString().split('T')[0];
+    const base = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
+    const url = `${base}/api/v2/travel`;
 
-    const res = await axios.get(url, { params: { origin, destination, date: today } });
+    // Always send params; do NOT send cookies from the admin app
+    const res = await axios.get(url, {
+      params: { origin, destination, date: today },
+      withCredentials: false,
+      headers: { Accept: 'application/json' },
+    });
+
     const data = res?.data;
 
     // 🔒 If the backend accidentally returned HTML or empty response, handle it safely
-    if (!data || typeof data !== "object" || data.html || data.includes) {
-      console.warn("⚠️ Invalid travel data response:", data);
+    if (!data || typeof data !== 'object' || data.html || data.includes) {
+      console.warn('⚠️ Invalid travel data response:', data);
       return null;
     }
 
     // Pull source info for debugging
     const srcOut = data?.sources?.outbound || 'unknown';
     const srcRet = data?.sources?.return || 'unknown';
-    console.log(`🧭 Admin travel fetch [out:${srcOut} ret:${srcRet}]`, origin, '→', destination);
+    console.log(`🧭 Admin travel fetch [out:${srcOut} ret:${srcRet}]`, origin, '→', destination, 'on', today);
 
     // Normalize to a clean format expected by admin
     const normalized = {
@@ -42,6 +52,7 @@ export const getTravelData = async (origin, destination, date) => {
         : '0 mins',
       durationValue: data?.outbound?.duration?.value || 0,
       _source: srcOut,
+      _date: today,
     };
 
     travelCache[cacheKey] = normalized;

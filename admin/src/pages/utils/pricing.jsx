@@ -5,16 +5,18 @@ const calculateActPricing = async (
   selectedDate,
   selectedLineup
 ) => {
-  console.log(`🧪 act.costPerMile: ${act.costPerMile}, useCountyTravelFee: ${act.useCountyTravelFee}`);
+  console.log(
+    `🧪 act.costPerMile: ${act.costPerMile}, useCountyTravelFee: ${act.useCountyTravelFee}`
+  );
   console.log(`🗺️ act.countyFees:`, act.countyFees);
 
   // Backend base URL (Render). Fallback keeps things working if env var is missing.
-  const BASE =
-    (import.meta.env.VITE_BACKEND_URL || "https://tsc2025.onrender.com").replace(/\/+$/, "");
+  const BASE = (import.meta.env.VITE_BACKEND_URL || "https://tsc2025.onrender.com")
+    .replace(/\/+$/, "");
 
-  // Tiny helper: fetch travel JSON safely and support both shapes
+  // Tiny helper: fetch travel JSON safely (new v2 endpoint) and support both shapes
   const fetchTravel = async (origin, destination, dateISO) => {
-    const url = `${BASE}/api/travel/get-travel-data?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(
+    const url = `${BASE}/api/v2/travel?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(
       destination
     )}&date=${encodeURIComponent(dateISO)}`;
 
@@ -24,11 +26,13 @@ const calculateActPricing = async (
     try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
     if (!res.ok) throw new Error(`travel http ${res.status}`);
 
-    // Normalizers
+    // Normalizers (prefer new shape; fall back to legacy rows/elements)
     const firstEl = data?.rows?.[0]?.elements?.[0];
-    const outbound = data?.outbound || (firstEl?.distance && firstEl?.duration ? {
-      distance: firstEl.distance, duration: firstEl.duration, fare: firstEl.fare
-    } : undefined);
+    const outbound =
+      data?.outbound ||
+      (firstEl?.distance && firstEl?.duration
+        ? { distance: firstEl.distance, duration: firstEl.duration, fare: firstEl.fare }
+        : undefined);
     const returnTrip = data?.returnTrip;
 
     return { outbound, returnTrip, raw: data };
@@ -59,25 +63,26 @@ const calculateActPricing = async (
 
   // ---- northern logic (for team swap) ----
   const northernCounties = new Set([
-    "ceredigion", "cheshire", "cleveland", "conway", "cumbria", "denbighshire", "derbyshire", "durham",
-    "flintshire", "greater manchester", "gwynedd", "herefordshire", "lancashire", "leicestershire",
-    "lincolnshire", "merseyside", "north humberside", "north yorkshire", "northumberland",
-    "nottinghamshire", "rutland", "shropshire", "south humberside", "south yorkshire",
-    "staffordshire", "tyne and wear", "warwickshire", "west midlands", "west yorkshire",
-    "worcestershire", "wrexham", "rhondda cynon taf", "torfaen", "neath port talbot", "bridgend",
-    "blaenau gwent", "caerphilly", "cardiff", "merthyr tydfil", "newport", "aberdeen city",
-    "aberdeenshire", "angus", "argyll and bute", "clackmannanshire", "dumfries and galloway",
-    "dundee city", "east ayrshire", "east dunbartonshire", "east lothian", "east renfrewshire",
-    "edinburgh", "falkirk", "fife", "glasgow", "highland", "inverclyde", "midlothian", "moray",
-    "na h eileanan siar", "north ayrshire", "north lanarkshire", "orkney islands", "perth and kinross",
-    "renfrewshire", "scottish borders", "shetland islands", "south ayrshire", "south lanarkshire",
-    "stirling", "west dunbartonshire", "west lothian"
+    "ceredigion","cheshire","cleveland","conway","cumbria","denbighshire","derbyshire","durham",
+    "flintshire","greater manchester","gwynedd","herefordshire","lancashire","leicestershire",
+    "lincolnshire","merseyside","north humberside","north yorkshire","northumberland",
+    "nottinghamshire","rutland","shropshire","south humberside","south yorkshire",
+    "staffordshire","tyne and wear","warwickshire","west midlands","west yorkshire",
+    "worcestershire","wrexham","rhondda cynon taf","torfaen","neath port talbot","bridgend",
+    "blaenau gwent","caerphilly","cardiff","merthyr tydfil","newport","aberdeen city",
+    "aberdeenshire","angus","argyll and bute","clackmannanshire","dumfries and galloway",
+    "dundee city","east ayrshire","east dunbartonshire","east lothian","east renfrewshire",
+    "edinburgh","falkirk","fife","glasgow","highland","inverclyde","midlothian","moray",
+    "na h eileanan siar","north ayrshire","north lanarkshire","orkney islands","perth and kinross",
+    "renfrewshire","scottish borders","shetland islands","south ayrshire","south lanarkshire",
+    "stirling","west dunbartonshire","west lothian"
   ]);
   const isNorthernGig = northernCounties.has(String(selectedCounty || "").toLowerCase().trim());
 
-  const bandMembers = act.useDifferentTeamForNorthernGigs && isNorthernGig
-    ? act.northernTeam || []
-    : smallestLineup.bandMembers || [];
+  const bandMembers =
+    act.useDifferentTeamForNorthernGigs && isNorthernGig
+      ? act.northernTeam || []
+      : smallestLineup.bandMembers || [];
 
   console.log(`🎵 Calculating for ${act.name}`);
 
@@ -116,13 +121,12 @@ const calculateActPricing = async (
       try {
         console.log("🚚 Fetching travel data (per-mile):", { origin: postCode, destination, date: selectedDate });
         const { outbound, raw } = await fetchTravel(postCode, destination, selectedDate);
-        // prefer new shape
         const meters =
           outbound?.distance?.value ??
           raw?.rows?.[0]?.elements?.[0]?.distance?.value ??
           0;
         const miles = meters / 1609.34;
-        travelFee += miles * Number(act.costPerMile) * 25; // round-trip multiplier you used
+        travelFee += miles * Number(act.costPerMile) * 25; // keep your business multiplier
       } catch (e) {
         console.warn("⚠️ travel fetch failed (per-mile):", e?.message || e);
       }

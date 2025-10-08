@@ -1,6 +1,7 @@
 // frontend/src/pages/utils/pricing.jsx
 // Optional: Outcode → County mapping
 import outcodeToCounty from "./outcodeToCounty";
+import { getTravelV2 } from "./travelV2";
 
 const calculateActPricing = async (act, selectedCounty, selectedAddress, selectedDate, selectedLineup) => {
   // Guard
@@ -201,12 +202,7 @@ const calculateActPricing = async (act, selectedCounty, selectedAddress, selecte
           : selectedAddress?.postcode || selectedAddress?.address || "";
       if (!postCode || !destination) continue;
 
-      const res = await fetch(
-        `/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`
-      );
-      const data = await res.json();
-      const distanceMeters = data?.outbound?.distance?.value || 0;
-      const miles = distanceMeters / 1609.34;
+      const { miles } = await getTravelV2(postCode, destination, selectedDate);
       const cost = (miles || 0) * Number(act.costPerMile) * 25;
       travelFee += cost;
     }
@@ -221,13 +217,7 @@ const calculateActPricing = async (act, selectedCounty, selectedAddress, selecte
           : selectedAddress?.postcode || selectedAddress?.address || "";
       if (!postCode || !destination) continue;
 
-  const apiBase = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
-
-const url = `${apiBase}/api/travel/get-travel-data?origin=${encodeURIComponent(postCode)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(selectedDate)}`;
-const res = await fetch(url, { headers: { accept: "application/json" } });
-      const data = await res.json();
-      const outbound = data?.outbound;
-      const returnTrip = data?.returnTrip;
+      const { outbound, returnTrip } = await getTravelV2(postCode, destination, selectedDate);
       if (!outbound || !returnTrip) continue;
 
       const totalDistanceMiles = (outbound.distance.value + returnTrip.distance.value) / 1609.34;
