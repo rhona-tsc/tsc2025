@@ -6,10 +6,10 @@ import { getTravelData } from "../controllers/travelController.js";
 const router = express.Router();
 
 /**
- * GET /api/v2/availability/acts-by-date?date=YYYY-MM-DD
+ * GET /api/v2/availability/acts-by-dateV2?date=YYYY-MM-DD
  * Reuses your existing controller; no legacy aliasing.
  */
-router.get("/availability/acts-by-date", async (req, res) => {
+router.get("/availability/acts-by-dateV2", async (req, res) => {
   try {
     const date = String(req.query?.date || "").slice(0, 10);
     if (!date) return res.status(400).json({ success: false, message: "date required" });

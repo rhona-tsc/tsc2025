@@ -137,7 +137,7 @@ const id = extractVideoId(video);
 
         const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
         const dateISO = new Date(selectedDate).toISOString().slice(0, 10);
-        const u = new URL(`${base}/api/availability/acts-by-date`);
+        const u = new URL(`${base}/api/availability/acts-by-dateV2`);
         u.searchParams.set("date", dateISO);
         u.searchParams.set("actId", String(actId));
 

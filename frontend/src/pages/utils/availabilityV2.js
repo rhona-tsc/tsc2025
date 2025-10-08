@@ -5,7 +5,7 @@ export async function fetchActsByDateV2(dateISO) {
   const d = String(dateISO || "").slice(0,10);
   if (!d) return { map: {}, availableActIds: [], unavailableActIds: [] };
 
-  const url = `${BACKEND}/api/v2/availability/acts-by-date?date=${encodeURIComponent(d)}`;
+  const url = `${BACKEND}/api/v2/availability/acts-by-dateV2?date=${encodeURIComponent(d)}`;
   const r = await fetch(url, { headers: { accept: "application/json" }, credentials: "omit" });
   const text = await r.text();
   let j = {};
