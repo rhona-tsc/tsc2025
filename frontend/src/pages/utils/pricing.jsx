@@ -1,7 +1,7 @@
 // frontend/src/pages/utils/pricing.jsx
 // Optional: Outcode → County mapping
 import outcodeToCounty from "./outcodeToCounty";
-import { getTravelV2 } from "./travelV2";
+import getTravelV2 from "./travelV2";
 
 const calculateActPricing = async (act, selectedCounty, selectedAddress, selectedDate, selectedLineup) => {
   // Guard

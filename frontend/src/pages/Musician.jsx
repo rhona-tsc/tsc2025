@@ -173,19 +173,32 @@ const Musician = () => {
           setIsYesForSelectedDate(null);
           return;
         }
+
         const dateISO = new Date(selectedDate).toISOString().slice(0, 10);
-        const r = await fetch(
-          `/api/availability/acts-by-date?date=YYYY-MM-DD?musicianId=${actData._id}&dateISO=${dateISO}`
-        );
-        const j = await r.json();
-        if (!abort) setIsYesForSelectedDate(j?.latestReply === "yes");
+
+        // Always hit the backend directly (no relative Netlify paths)
+        const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
+        const url = new URL(`${base}/api/availability/acts-by-date`);
+        url.searchParams.set("date", dateISO);
+        url.searchParams.set("musicianId", String(actData._id));
+
+        const resp = await fetch(url.toString(), { headers: { accept: "application/json" } });
+        const text = await resp.text();
+
+        let data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
+
+        if (!abort) {
+          // Accept a few possible shapes
+          const latest = data?.latestReply ?? data?.reply ?? data?.status ?? "";
+          setIsYesForSelectedDate(String(latest).toLowerCase() === "yes");
+        }
       } catch {
         if (!abort) setIsYesForSelectedDate(null);
       }
     })();
-    return () => {
-      abort = true;
-    };
+
+    return () => { abort = true; };
   }, [actData?._id, selectedDate]);
 
   useEffect(() => {

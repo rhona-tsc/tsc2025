@@ -304,16 +304,16 @@ const updatePerformance = (actId, lineupId, patch) => {
  // Trigger availability requests for an act/lineup — **gated** by allowed act names
 const requestVocalistAvailability = async ({ actId, lineupId }) => {
   try {
+    // Require date + address
     if (!selectedDate || !selectedAddress) return;
-    if (!isActAllowed(actId)) {
-      return;
-    }
+    // Only allow whitelisted acts (prevents unwanted spam)
+    if (!isActAllowed(actId)) return;
 
-    const act = acts.find((a) => String(a._id) === String(actId));
+    // Resolve act + lineup for an optional fee hint
+    const act = Array.isArray(acts) ? acts.find((a) => String(a._id) === String(actId)) : null;
     let feeForMsg = null;
 
     if (act) {
-      // choose lineup (explicit lineupId or largest)
       const lineup =
         (act.lineups || []).find(
           (l) =>
@@ -336,17 +336,29 @@ const requestVocalistAvailability = async ({ actId, lineupId }) => {
       }
     }
 
-    // 🔁 V2 endpoint
-    await axios.post(`${backendUrl}/api/availability-v2/request`, {
-      actId,
-      lineupId,
-      date: selectedDate,       // accepts YYYY-MM-DD or ISO
-      address: selectedAddress, // full address string
-      // fee: feeForMsg,         // optional; V2 will compute if omitted
-    });
+    // Always hit absolute backend URL to avoid Netlify/ngrok intercepts
+    const base = String(backendUrl || "").replace(/\/+$/, "");
+    const url = `${base}/api/availability-v2/request`;
 
-   
+    // Normalize date to YYYY-MM-DD
+    const dateISO = new Date(selectedDate).toISOString().slice(0, 10);
+
+    const payload = {
+      actId: String(actId),
+      lineupId: lineupId != null ? String(lineupId) : null,
+      date: dateISO,
+      address: String(selectedAddress),
+      // fee: feeForMsg ?? undefined, // optional — backend can compute if omitted
+    };
+
+    await axios.post(url, payload, {
+      headers: { accept: "application/json" },
+      withCredentials: false,
+      timeout: 15000,
+    });
   } catch (err) {
+    // Keep UI quiet, but log for debugging
+    console.warn("requestVocalistAvailability failed:", err?.message || err);
   }
 };
 
@@ -372,27 +384,35 @@ const requestVocalistAvailability = async ({ actId, lineupId }) => {
           if (now - last < 6 * 60 * 60 * 1000) continue;
 
           try {
-            // Skip if already YES recorded
-            const r = await fetch(
-  api(`api/availability/acts-by-date?date=YYYY-MM-DD?actId=${encodeURIComponent(actId)}&dateISO=${encodeURIComponent(dateISO)}`)
- );
-            const j = await r.json();
-            if (j?.latestReply === "yes") continue;
+            // ✅ Skip if already YES recorded (call absolute backend URL)
+            const res = await fetch(
+              api(`api/availability/check-latest?actId=${encodeURIComponent(actId)}&dateISO=${encodeURIComponent(dateISO)}`),
+              { headers: { accept: "application/json" } }
+            );
+            const text = await res.text();
+            let j = {};
+            try { j = text ? JSON.parse(text) : {}; } catch {}
+            if (res.ok && j?.latestReply === "yes") continue;
 
-      await axios.post(`${backendUrl}/api/availability-v2/request`, {
-  actId,
-  lineupId: null,
-  date: dateISO,
-  address: selectedAddress,
-});
+            // ✅ Request availability via V2 (absolute URL)
+            await axios.post(
+              api("api/availability-v2/request"),
+              {
+                actId,
+                lineupId: null,
+                date: dateISO,
+                address: selectedAddress,
+              },
+              { headers: { accept: "application/json" }, withCredentials: false, timeout: 15000 }
+            );
 
             lastAutoTriggerRef.current[key] = now;
-           
           } catch (e) {
-          
+            // swallow per design
           }
         }
       } catch (e) {
+        // swallow
       }
     })();
   }, [selectedDate, selectedAddress, shortlistedActs, backendUrl]);

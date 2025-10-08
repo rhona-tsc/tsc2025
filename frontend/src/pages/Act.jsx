@@ -131,22 +131,32 @@ const id = extractVideoId(video);
     (async () => {
       try {
         if (!actId || !selectedDate) {
-          setIsYesForSelectedDate(null);
+          if (!abort) setIsYesForSelectedDate(null);
           return;
         }
+
+        const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
         const dateISO = new Date(selectedDate).toISOString().slice(0, 10);
-        const r = await fetch(
-          `/api/availability/acts-by-date?date=YYYY-MM-DD?actId=${actId}&dateISO=${dateISO}`
-        );
-        const j = await r.json();
-        if (!abort) setIsYesForSelectedDate(j?.latestReply === "yes");
-      } catch {
+        const u = new URL(`${base}/api/availability/acts-by-date`);
+        u.searchParams.set("date", dateISO);
+        u.searchParams.set("actId", String(actId));
+
+        const resp = await fetch(u.toString(), { headers: { accept: "application/json" } });
+        const text = await resp.text();
+        let j = {};
+        try { j = text ? JSON.parse(text) : {}; } catch { j = {}; }
+        if (!resp.ok) throw new Error(`availability ${resp.status}`);
+
+        if (!abort) {
+          // tolerate different shapes; prefer explicit latestReply
+          const latest = j?.latestReply || j?.latest || j?.reply || null;
+          setIsYesForSelectedDate(latest === "yes" ? true : (latest === "no" ? false : null));
+        }
+      } catch (e) {
         if (!abort) setIsYesForSelectedDate(null);
       }
     })();
-    return () => {
-      abort = true;
-    };
+    return () => { abort = true; };
   }, [actId, selectedDate]);
 
 

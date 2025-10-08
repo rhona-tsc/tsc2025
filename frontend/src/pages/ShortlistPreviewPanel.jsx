@@ -189,20 +189,33 @@ const ShortlistPreviewPanel = ({ hoveredAct, removeFromCart }) => {
     calculateAndSetPrice();
   }, [actData, selectedCounty, selectedAddress, selectedDate, selectedLineup]);
 
-  // verify latest reply on this act+date
+  // verify latest reply on this act+date (use backend base + proper query params)
   useEffect(() => {
     let abort = false;
     (async () => {
       try {
         if (!actData?._id || !selectedDate) {
-          setIsYesForSelectedDate(null);
+          if (!abort) setIsYesForSelectedDate(null);
           return;
         }
+
+        const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
         const dateISO = new Date(selectedDate).toISOString().slice(0, 10);
-        const r = await fetch(`/api/availability/acts-by-date?date=YYYY-MM-DD?actId=${actData._id}&dateISO=${dateISO}`);
-        const j = await r.json();
-        if (!abort) setIsYesForSelectedDate(j?.latestReply === 'yes');
-      } catch {
+        const u = new URL(`${base}/api/availability/acts-by-date`);
+        u.searchParams.set("date", dateISO);
+        u.searchParams.set("actId", String(actData._id));
+
+        const resp = await fetch(u.toString(), { headers: { accept: "application/json" } });
+        const text = await resp.text();
+        let j = {};
+        try { j = text ? JSON.parse(text) : {}; } catch { j = {}; }
+        if (!resp.ok) throw new Error(`availability ${resp.status}`);
+
+        if (!abort) {
+          const latest = j?.latestReply || j?.latest || j?.reply || null;
+          setIsYesForSelectedDate(latest === 'yes' ? true : (latest === 'no' ? false : null));
+        }
+      } catch (e) {
         if (!abort) setIsYesForSelectedDate(null);
       }
     })();
@@ -239,33 +252,60 @@ const ShortlistPreviewPanel = ({ hoveredAct, removeFromCart }) => {
   const selectedDateISO =
     selectedDate ? new Date(selectedDate).toISOString().slice(0, 10) : null;
 
+  // Resolve which musician to show on the badge (uses backend base URL; no relative /api)
   useEffect(() => {
     const actIdVal = actData?._id;
+
     // Compute badge date as fallback
     const badgeDateISO = actData?.availabilityBadge?.dateISO
       ? String(actData.availabilityBadge.dateISO).slice(0, 10)
       : null;
+
     // Use selectedDateISO if present, otherwise badgeDateISO
     const dateToUse = selectedDateISO || badgeDateISO;
-    // Debug log for which date is being used
+
     console.log("🗓️ resolve-musician dateToUse", { selectedDateISO, badgeDateISO, dateToUse });
+
     if (!actIdVal || !dateToUse) {
       setBadgeMusicianId("");
       return;
     }
-    let abort = false;
+
+    let cancelled = false;
+
     (async () => {
       try {
-        const res = await fetch(
-          `/api/availability/resolve-musician?actId=${actIdVal}&dateISO=${dateToUse}`
-        );
-        const j = await res.json();
-        if (!abort) setBadgeMusicianId(j?.musicianId || "");
-      } catch {
-        if (!abort) setBadgeMusicianId("");
+        const base = (import.meta.env?.VITE_BACKEND_URL || "").replace(/\/+$/, "");
+        const url = new URL(`${base}/api/availability/resolve-musician`);
+        url.searchParams.set("actId", String(actIdVal));
+        url.searchParams.set("dateISO", String(dateToUse).slice(0, 10));
+
+        const resp = await fetch(url.toString(), { headers: { accept: "application/json" } });
+        const text = await resp.text();
+
+        let j = {};
+        try {
+          j = text ? JSON.parse(text) : {};
+        } catch {
+          j = {};
+        }
+
+        if (!resp.ok) {
+          throw new Error(`resolve-musician ${resp.status}`);
+        }
+
+        if (!cancelled) {
+          setBadgeMusicianId(j?.musicianId || "");
+        }
+      } catch (e) {
+        console.warn("⚠️ resolve-musician fetch failed:", e?.message || e);
+        if (!cancelled) setBadgeMusicianId("");
       }
     })();
-    return () => { abort = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [actData?._id, selectedDateISO, actData?.availabilityBadge?.dateISO]);
 
   const badge = actData?.availabilityBadge || {};
