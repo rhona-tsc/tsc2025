@@ -260,43 +260,9 @@ app.get("/api/availability/acts-available", async (req, res) => {
 });
 
 
-// Alias for legacy/alternate client
-app.get("/api/availability/acts-by-date", async (req, res) => {
-  const date = String(req.query?.date || "").slice(0, 10);
-  console.log("🗓️  GET /api/availability/acts-by-date (alias to acts-available)", { date });
-  try {
-    return await getAvailableActIds(req, res);
-  } catch (err) {
-    console.error("❌ acts-by-date failed:", err?.message || err);
-    return res.status(500).json({ success: false, message: "Server error" });
-  }
-});
 
-// Alias: old "check-latest" → new acts-available-by-date
-app.get('/api/availability/check-latest', async (req, res) => {
-  try {
-    // old shape: ?actId=...&dateISO=YYYY-MM-DD
-    const dateISO = String(req.query?.dateISO || '').slice(0, 10);
-    if (!dateISO) return res.status(400).json({ success:false, message:'dateISO required' });
 
-    // Reuse your existing handler (same as acts-by-date)
-    // It expects ?date=YYYY-MM-DD on req.query
-    req.query.date = dateISO;
 
-    // If you want the old endpoint to answer "is this act available?",
-    // you can filter the result before returning:
-    // const result = await getAvailableActIdsRaw(dateISO); // your internal function
-    // const actId = String(req.query?.actId || '');
-    // const isAvailable = actId && result.availableActIds?.includes(actId);
-    // return res.json({ success:true, dateISO, actId, isAvailable, ...result });
-
-    // simplest: just return the same payload as acts-by-date
-    return await getAvailableActIds(req, res);
-  } catch (err) {
-    console.error('❌ /api/availability/check-latest failed:', err?.message || err);
-    return res.status(500).json({ success:false, message:'Server error' });
-  }
-});
 
 // Temporary aliases so existing Twilio config keeps working
 app.post(
