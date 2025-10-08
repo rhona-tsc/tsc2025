@@ -87,7 +87,7 @@ const loadAvailabilityForDate = async (dateISO) => {
   setAvailLoading(true);
   try {
     // 2) Try the canonical acts-by-date endpoint
-    const url1 = api(`api/availability/acts-by-dateV2?date=${encodeURIComponent(d)}`);
+    const url1 = api(`api/v2/availability/acts-by-dateV2?date=${encodeURIComponent(d)}`);
     let res = await fetch(url1, { headers: { accept: "application/json" } });
     let text = await res.text();
     let data = {};

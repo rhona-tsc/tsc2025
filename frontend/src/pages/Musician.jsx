@@ -178,7 +178,7 @@ const Musician = () => {
 
         // Always hit the backend directly (no relative Netlify paths)
         const base = (import.meta.env.VITE_BACKEND_URL || "").replace(/\/+$/, "");
-        const url = new URL(`${base}/api/availability/acts-by-dateV2`);
+        const url = new URL(`${base}/api/v2/availability/acts-by-dateV2`);
         url.searchParams.set("date", dateISO);
         url.searchParams.set("musicianId", String(actData._id));
 

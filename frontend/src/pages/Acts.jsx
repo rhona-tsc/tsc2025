@@ -413,7 +413,7 @@ useEffect(() => {
       if (!res.ok) {
         if (res.status === 404) {
           res = await fetch(
-            api(`api/availability/acts-available?date=${encodeURIComponent(d)}`),
+            api(`api/v2/availability/acts-available?date=${encodeURIComponent(d)}`),
             { headers: { accept: "application/json" } }
           );
           bodyText = "";
