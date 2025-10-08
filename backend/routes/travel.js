@@ -8,8 +8,6 @@ export default async function getTravelV2(origin, destination, dateISO) {
   // 2) window.__BACKEND_URL__ set in index.html at runtime (optional)
   // 3) Render URL fallback (safe default for prod)
   const BASE_RAW =
-    (import.meta.env && import.meta.env.VITE_BACKEND_URL) ||
-    (typeof window !== "undefined" && window.__BACKEND_URL__) ||
     "https://tsc2025.onrender.com";
 
   const BASE = String(BASE_RAW || "").replace(/\/+$/, "");
@@ -27,7 +25,7 @@ export default async function getTravelV2(origin, destination, dateISO) {
     `&destination=${encodeURIComponent(destination || "")}` +
     `&date=${encodeURIComponent((dateISO || "").slice(0, 10))}`;
 
-  const url = `${BASE}/api/travel/get-travel-data?${qs}`;
+  const url = `${BASE}/api/travel/travel-data?${qs}`;
 
   const res = await fetch(url, { headers: { accept: "application/json" } });
   const text = await res.text();

@@ -53,7 +53,7 @@ router.get("/availability/check", async (req, res) => {
  * GET /api/v2/travel?origin=SL6+8HN&destination=SW1A+1AA&date=YYYY-MM-DD
  * Thin wrapper that calls your existing travel handler, then normalizes.
  */
-router.get("/travel", async (req, res) => {
+router.get("/travel-data", async (req, res) => {
   try {
     const origin = String(req.query?.origin || "").trim();
     const destination = String(req.query?.destination || "").trim();

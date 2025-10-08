@@ -1,23 +1,23 @@
 // frontend/src/pages/utils/travelV2.js
-import { BACKEND } from "../../apiBase";
+export default async function getTravelV2(origin, destination, dateISO) {
+  const BASE_RAW =
+    "https://tsc2025.onrender.com";
+  const BASE = String(BASE_RAW || "").replace(/\/+$/, "");
+  const url = `${BASE}/api/travel/travel-data?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent((dateISO || "").slice(0,10))}`;
 
-export async function getTravelV2(origin, destination, date) {
-  const url = new URL(`${BACKEND}/api/v2/travel`);
-  url.searchParams.set("origin", origin);
-  url.searchParams.set("destination", destination);
-  if (date) url.searchParams.set("date", String(date).slice(0,10));
+  const res = await fetch(url, { headers: { accept: "application/json" } });
+  const text = await res.text();
 
-  const r = await fetch(url.toString(), { headers: { accept: "application/json" }, credentials: "omit" });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j?.message || `HTTP ${r.status}`);
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; }
+  catch { throw new Error("[travelV2] Non-JSON response: " + text.slice(0, 80)); }
 
-  const meters  = j?.outbound?.distance?.value || 0;
-  const seconds = j?.outbound?.duration?.value || 0;
-  return {
-    outbound: j?.outbound || null,
-    returnTrip: j?.returnTrip || null,
-    miles: meters / 1609.34,
-    minutes: seconds / 60,
-    sources: j?.sources || {}
-  };
+  if (!res.ok) throw new Error(`[travelV2] ${res.status} ${data?.message || text}`);
+
+  const el = data?.rows?.[0]?.elements?.[0];
+  const outbound = data?.outbound || (el?.distance && el?.duration ? { distance: el.distance, duration: el.duration, fare: el.fare } : undefined);
+  const returnTrip = data?.returnTrip;
+  const miles = (outbound?.distance?.value || 0) / 1609.34;
+
+  return { outbound, returnTrip, miles, raw: data };
 }
