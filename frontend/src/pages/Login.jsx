@@ -58,7 +58,7 @@ const Login = () => {
         const response = await axios.post(
           `${backendUrl}/api/user/login`,
           { email, password },
-          { withCredentials: true }
+          { withCredentials: false }
         );
         if (response.data.success) {
           setToken(response.data.token);
