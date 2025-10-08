@@ -136,7 +136,7 @@ const id = extractVideoId(video);
         }
         const dateISO = new Date(selectedDate).toISOString().slice(0, 10);
         const r = await fetch(
-          `/api/availability/check-latest?actId=${actId}&dateISO=${dateISO}`
+          `/api/availability/acts-by-date?date=YYYY-MM-DD?actId=${actId}&dateISO=${dateISO}`
         );
         const j = await r.json();
         if (!abort) setIsYesForSelectedDate(j?.latestReply === "yes");

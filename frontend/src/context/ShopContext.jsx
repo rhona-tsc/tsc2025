@@ -374,7 +374,7 @@ const requestVocalistAvailability = async ({ actId, lineupId }) => {
           try {
             // Skip if already YES recorded
             const r = await fetch(
-  api(`api/availability/check-latest?actId=${encodeURIComponent(actId)}&dateISO=${encodeURIComponent(dateISO)}`)
+  api(`api/availability/acts-by-date?date=YYYY-MM-DD?actId=${encodeURIComponent(actId)}&dateISO=${encodeURIComponent(dateISO)}`)
  );
             const j = await r.json();
             if (j?.latestReply === "yes") continue;

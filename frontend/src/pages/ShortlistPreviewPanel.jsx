@@ -199,7 +199,7 @@ const ShortlistPreviewPanel = ({ hoveredAct, removeFromCart }) => {
           return;
         }
         const dateISO = new Date(selectedDate).toISOString().slice(0, 10);
-        const r = await fetch(`/api/availability/check-latest?actId=${actData._id}&dateISO=${dateISO}`);
+        const r = await fetch(`/api/availability/acts-by-date?date=YYYY-MM-DD?actId=${actData._id}&dateISO=${dateISO}`);
         const j = await r.json();
         if (!abort) setIsYesForSelectedDate(j?.latestReply === 'yes');
       } catch {

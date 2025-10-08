@@ -175,7 +175,7 @@ const Musician = () => {
         }
         const dateISO = new Date(selectedDate).toISOString().slice(0, 10);
         const r = await fetch(
-          `/api/availability/check-latest?musicianId=${actData._id}&dateISO=${dateISO}`
+          `/api/availability/acts-by-date?date=YYYY-MM-DD?musicianId=${actData._id}&dateISO=${dateISO}`
         );
         const j = await r.json();
         if (!abort) setIsYesForSelectedDate(j?.latestReply === "yes");
