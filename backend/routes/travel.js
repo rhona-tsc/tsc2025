@@ -1,22 +1,61 @@
-import express from "express";
-import { getTravelData } from "../controllers/travelController.js";
-import DistanceCache from "../models/distanceCacheModel.js";
+// frontend/src/pages/utils/travelV2.js
+// Single, hardened helper used by the store + admin to fetch travel data
+// Forces an ABSOLUTE backend base so calls never hit the Netlify origin.
 
-// ✅ ADD THIS LINE:
-const router = express.Router();
+export async function getTravelV2(origin, destination, dateISO) {
+  // Pick a backend base in this priority:
+  // 1) VITE_BACKEND_URL injected at build
+  // 2) window.__BACKEND_URL__ set in index.html at runtime (optional)
+  // 3) Render URL fallback (safe default for prod)
+  const BASE_RAW =
+    (import.meta.env && import.meta.env.VITE_BACKEND_URL) ||
+    (typeof window !== "undefined" && window.__BACKEND_URL__) ||
+    "https://tsc2025.onrender.com";
 
-// ✅ Use controller here
-router.get("/get-travel-data", getTravelData);
-
-// Travel cache view (optional admin route)
-router.get("/travel-cache", async (req, res) => {
-  try {
-    const cache = await DistanceCache.find().limit(100).sort({ lastUpdated: -1 });
-    res.json(cache);
-  } catch (err) {
-    console.error("❌ Error fetching travel cache:", err);
-    res.status(500).json({ error: "Error fetching travel cache" });
+  const BASE = String(BASE_RAW || "").replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(BASE)) {
+    // If this ever triggers in prod, you know your env var is missing.
+    console.warn(
+      "[travelV2] VITE_BACKEND_URL not set (got:",
+      BASE_RAW,
+      ") — falling back to Render default."
+    );
   }
-});
 
-export default router;
+  const qs =
+    `origin=${encodeURIComponent(origin || "")}` +
+    `&destination=${encodeURIComponent(destination || "")}` +
+    `&date=${encodeURIComponent((dateISO || "").slice(0, 10))}`;
+
+  const url = `${BASE}/api/travel/get-travel-data?${qs}`;
+
+  const res = await fetch(url, { headers: { accept: "application/json" } });
+  const text = await res.text();
+
+  // Try to JSON-parse; if it looks like HTML (e.g. Netlify/ngrok error page), throw early
+  let data = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error("[travelV2] Non‑JSON response (possible proxy/redirect): " + text.slice(0, 80));
+  }
+
+  if (!res.ok) {
+    const msg = data?.message || data?.error || text || `HTTP ${res.status}`;
+    throw new Error(`[travelV2] ${res.status} ${msg}`);
+  }
+
+  // Normalise both the **new** shape and the Google Matrix legacy shape
+  const firstEl = data?.rows?.[0]?.elements?.[0];
+  const outbound =
+    data?.outbound ||
+    (firstEl?.distance && firstEl?.duration
+      ? { distance: firstEl.distance, duration: firstEl.duration, fare: firstEl.fare }
+      : undefined);
+  const returnTrip = data?.returnTrip;
+
+  const miles =
+    (outbound?.distance?.value != null ? outbound.distance.value : 0) / 1609.34;
+
+  return { outbound, returnTrip, miles, raw: data };
+}
