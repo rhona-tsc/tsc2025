@@ -83,11 +83,16 @@ const corsOptions = {
   },
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization','token','X-Requested-With'],
-  credentials: false, // not using cookies for admin portal login flow
+  credentials: true, // allow credentials so axios/fetch withCredentials: true preflights succeed
   optionsSuccessStatus: 204,
 };
 
 app.use(cors(corsOptions));
+app.use((req, res, next) => {
+  // If Origin is whitelisted, cors() will already have set ACAO; we just ensure ACAC is present
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  next();
+});
 app.options('*', cors(corsOptions)); // generic preflight
 app.options('/api/musician-login/*', cors(corsOptions), (_req, res) => res.sendStatus(204)); // explicit preflight for login
 
