@@ -117,7 +117,7 @@ const [availLoading, setAvailLoading] = useState(false);
     // Helper: fetch travel JSON safely; supports new + legacy shapes
     const fetchTravel = async (origin, destination, dateISO) => {
       const url =
-        `${BASE}/api/v2/travel-core` +
+        `${BASE}/api/v2/travel/travel-data` +
         `?origin=${encodeURIComponent(origin)}` +
         `&destination=${encodeURIComponent(destination)}` +
         `&date=${encodeURIComponent(String(dateISO).slice(0, 10))}`;

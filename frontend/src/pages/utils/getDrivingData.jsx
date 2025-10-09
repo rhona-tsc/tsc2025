@@ -7,9 +7,9 @@ import axios from "axios";
 export const getDrivingData = async (fromPostcode, toPostcode) => {
   try {
     const BASE = (
-      import.meta.env.VITE_BACKEND_URL || "https://tsc2025.onrender.com"
+      import.meta.env.VITE_BACKEND_URL || "https://tsc-backend-v2.onrender.com"
     ).replace(/\/+$/, "");
-    const url = `${BASE}/api/v2/travel-core`;
+    const url = `${BASE}/api/v2/travel/travel-data`;
 
     const params = {
       origin: fromPostcode,
