@@ -141,7 +141,7 @@ const calculateActPricing = async (
   console.log("👥 Lineup:", selectedLineup);
 
   // ✅ Always call your backend (Render/Netlify) not the site origin
-  const BASE = (import.meta.env.VITE_BACKEND_URL || "https://tsc2025.onrender.com").replace(/\/+$/, "");
+  const BASE = (import.meta.env.VITE_BACKEND_URL || "https://tsc-backend-v2.onrender.com").replace(/\/+$/, "");
 
   // Helper: fetch travel JSON (new + legacy shapes)
   const fetchTravel = async (origin, destination, dateISO) => {

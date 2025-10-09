@@ -27,7 +27,7 @@ import BookingBoard from "./pages/BookingBoard";
 import EnquiryBoard from "./pages/EnquiryBoard";
 
 export const backendUrl =
-  import.meta.env.VITE_BACKEND_URL || "https://tsc2025.onrender.com";
+  import.meta.env.VITE_BACKEND_URL || "https://tsc-backend-v2.onrender.com";
 
 if (!import.meta.env.VITE_BACKEND_URL) {
   console.warn("VITE_BACKEND_URL missing; using default:", backendUrl);

@@ -70,7 +70,7 @@ const CORS_WHITELIST = new Set([
   'http://localhost:5174',
   'https://tsc2025.netlify.app',
   'https://tsc2025-admin-portal.netlify.app',
-  'https://tsc2025.onrender.com',
+  'https://tsc-backend-v2.onrender.com',
   'https://www.thesupremecollective.co.uk',
   'https://api.thesupremecollective.co.uk',
   'https://meek-biscotti-8d5020.netlify.app',

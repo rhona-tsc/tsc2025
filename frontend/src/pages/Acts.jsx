@@ -111,7 +111,7 @@ const [availLoading, setAvailLoading] = useState(false);
   ) => {
     // Canonical backend base (never the Netlify origin)
     const BASE = (
-      import.meta.env.VITE_BACKEND_URL || "https://tsc2025.onrender.com"
+      import.meta.env.VITE_BACKEND_URL || "https://tsc-backend-v2.onrender.com"
     ).replace(/\/+$/, "");
 
     // Helper: fetch travel JSON safely; supports new + legacy shapes

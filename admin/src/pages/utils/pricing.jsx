@@ -11,7 +11,7 @@ const calculateActPricing = async (
   console.log(`🗺️ act.countyFees:`, act.countyFees);
 
   // Backend base URL (Render). Fallback keeps things working if env var is missing.
-  const BASE = (import.meta.env.VITE_BACKEND_URL || "https://tsc2025.onrender.com")
+  const BASE = (import.meta.env.VITE_BACKEND_URL || "https://tsc-backend-v2.onrender.com")
     .replace(/\/+$/, "");
 
   // Tiny helper: fetch travel JSON safely (new v2 endpoint) and support both shapes

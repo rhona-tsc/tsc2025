@@ -1,7 +1,7 @@
 // frontend/src/pages/utils/travelV2.js
 export default async function getTravelV2(origin, destination, dateISO) {
   const BASE_RAW =
-    "https://tsc2025.onrender.com";
+    "https://tsc-backend-v2.onrender.com";
   const BASE = String(BASE_RAW || "").replace(/\/+$/, "");
   const url = `${BASE}/api/v2/travel/travel-data?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent((dateISO || "").slice(0,10))}`;
 
