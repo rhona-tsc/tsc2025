@@ -401,7 +401,7 @@ useEffect(() => {
 
       // 1) Try canonical endpoint
       let res = await fetch(
-        api(`api/availability/acts-by-dateV2?date=${encodeURIComponent(d)}`),
+        api(`api/v2/availability/acts-by-dateV2?date=${encodeURIComponent(d)}`),
         { headers: { accept: "application/json" } }
       );
       let bodyText = "";
