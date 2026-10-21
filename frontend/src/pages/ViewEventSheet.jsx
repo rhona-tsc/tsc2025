@@ -12,6 +12,7 @@ import axios from "axios";
 import { ShopContext } from "../context/ShopContext";
 import debounce from "lodash.debounce";
 import CustomTimePicker from "../components/CustomTimePicker";
+import { resolveEventSheetHydration } from "../utils/eventSheetHydration";
 
 const esDebug = (...args) => console.log("🧾[EventSheet]", ...args);
 
@@ -117,7 +118,12 @@ const searchParams = new URLSearchParams(window.location.search);
 const isReadOnlyParam = searchParams.get("ro") === "1" || searchParams.get("readonly") === "1";
 const isReadOnlyRoute = /readonly/i.test(String(params?.mode || params?.view || ""));
 const READ_ONLY = isReadOnlyParam || isReadOnlyRoute;
-  const backendUrl = import.meta.env.VITE_BACKEND_URL;
+  // Event-sheet reads and writes must use the allocation-aware booking service.
+  // The legacy public API does not expose confirmed deputy assignments, which
+  // made the client view incorrectly fall back to "gathering" dietary details.
+  const backendUrl =
+    import.meta.env.VITE_EVENT_SHEET_BACKEND_URL ||
+    "https://tsc-backend-v2.onrender.com";
 
   React.useEffect(() => {
     (async () => {
@@ -185,17 +191,42 @@ const READ_ONLY = isReadOnlyParam || isReadOnlyRoute;
   // --- helpers ---
   const lsKey = (bid) => `eventSheet:${bid || "unknown"}`;
 
-  async function notifyBand(payload) {
+  async function notifyBand() {
     try {
+      setNotifying(true);
+      const bookingRef = booking?.bookingId || booking?.reference || null;
+      const mongoId = booking?._id || null;
+      const payload = {
+        bookingId: bookingRef,
+        bookingMongoId: mongoId,
+        bookingRef,
+        eventSheet: {
+          answers: sanitizeForSave(answers),
+          complete: sanitizeForSave(complete),
+          submitted: true,
+          updatedAt: new Date().toISOString(),
+        },
+      };
       const res = await axios.post(
         `${backendUrl}/api/booking/notify-band`,
         payload
       );
       console.log("✅ Band notified:", res.data);
+      setBooking((current) => ({
+        ...current,
+        eventSheet: {
+          ...(current?.eventSheet || {}),
+          ...payload.eventSheet,
+        },
+      }));
+      alert(res.data?.message || "Completed event sheet sent to the confirmed band members ✅");
       return res.data;
     } catch (err) {
       console.error("❌ notifyBand failed:", err);
-      throw err;
+      alert(err?.response?.data?.message || "Sorry—the completed event sheet could not be sent just now.");
+      return null;
+    } finally {
+      setNotifying(false);
     }
   }
   // --- Ensure we only send JSON-serializable, safe data ---
@@ -883,14 +914,39 @@ if (READ_ONLY) {
 
         if (match) {
           const key = lsKey(match.bookingId || match._id);
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            setAnswers(parsed.answers || {});
-            setComplete(parsed.complete || {});
-          } else if (match.eventSheet) {
-            setAnswers(match.eventSheet.answers || {});
-            setComplete(match.eventSheet.complete || {});
+          let cachedEventSheet = null;
+          try {
+            const raw = localStorage.getItem(key);
+            cachedEventSheet = raw ? JSON.parse(raw) : null;
+          } catch (error) {
+            console.warn("Ignoring invalid Event Sheet browser cache", error);
+          }
+
+          const hydrated = resolveEventSheetHydration({
+            serverEventSheet: match.eventSheet,
+            cachedEventSheet,
+          });
+
+          if (hydrated.source !== "empty") {
+            setAnswers(hydrated.answers);
+            setComplete(hydrated.complete);
+
+            // Keep the local recovery copy aligned with the authoritative
+            // server version so it cannot hide or later overwrite newer data.
+            if (hydrated.source === "server") {
+              try {
+                localStorage.setItem(
+                  key,
+                  JSON.stringify({
+                    ...match.eventSheet,
+                    answers: hydrated.answers,
+                    complete: hydrated.complete,
+                  })
+                );
+              } catch (error) {
+                console.warn("Could not refresh Event Sheet browser cache", error);
+              }
+            }
           } else {
             const src = Array.isArray(match.actsSummary)
               ? match.actsSummary
@@ -942,7 +998,10 @@ if (READ_ONLY) {
       booking.eventSheet?.emergencyContact?.ivrCode ||
       booking.contactRouting?.ivrCode
     );
-    if (hasNum && hasCode) return;
+    const hasRoutingTarget = !!booking.contactRouting?.targets?.some(
+      (target) => target?.phone
+    );
+    if (hasNum && hasCode && hasRoutingTarget) return;
 
     const idOrRef = booking.bookingId || booking._id;
     if (!idOrRef) return;
@@ -957,10 +1016,22 @@ if (READ_ONLY) {
           setBooking(updated); // refresh local copy so the read-only inputs fill in
         }
       } catch (e) {
-        console.warn("ensure-emergency-contact failed:", e?.message || e);
+        console.warn(
+          "ensure-emergency-contact failed:",
+          e?.response?.data?.message || e?.message || e
+        );
       }
     })();
-  }, [booking, backendUrl]);
+  }, [
+    booking?._id,
+    booking?.bookingId,
+    booking?.eventSheet?.emergencyContact?.number,
+    booking?.eventSheet?.emergencyContact?.ivrCode,
+    booking?.contactRouting?.proxyNumber,
+    booking?.contactRouting?.ivrCode,
+    booking?.contactRouting?.targets?.length,
+    backendUrl,
+  ]);
 
   // On return from Stripe (?parkingPaid=1 or ?parkingCanceled=1),
   // merge status into whatever was last saved (localStorage or state)
@@ -1093,9 +1164,16 @@ if (READ_ONLY) {
               String(l._id) === String(first.lineupId || first.lineup?.lineupId)
           )
         : first.lineup || null;
-      const members = Array.isArray(lineup?.bandMembers)
-        ? lineup.bandMembers
-        : [];
+      const confirmedMembers = [
+        booking?.assignedMusicians,
+        booking?.bookingMusicians,
+        booking?.bandLineup,
+      ].find((items) => Array.isArray(items) && items.length) || [];
+      const members = confirmedMembers.length
+        ? confirmedMembers
+        : Array.isArray(lineup?.bandMembers)
+          ? lineup.bandMembers
+          : [];
 
       const clean = (s = "") => String(s || "").trim();
       const mapDiet = (s) => {
